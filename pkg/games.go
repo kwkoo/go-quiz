@@ -1,10 +1,10 @@
 package pkg
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"log"
-	"math/rand"
 	"sort"
 	"sync"
 	"time"
@@ -90,7 +90,7 @@ func (g *Games) Add(host string) (Game, error) {
 	}
 
 	for i := 0; i < 5; i++ {
-		pin := rand.Intn(999) + 1
+		pin := generatePin()
 		if _, ok := g.all[pin]; !ok {
 			game.Pin = pin
 			g.all[pin] = &game
@@ -98,6 +98,16 @@ func (g *Games) Add(host string) (Game, error) {
 		}
 	}
 	return Game{}, errors.New("could not generate unique game pin")
+}
+
+func generatePin() int {
+	b := make([]byte, 4)
+	rand.Read(b)
+
+	total := int(b[0]) + int(b[1]) + int(b[2]) + int(b[3])
+	total = total % 998
+	total++
+	return total
 }
 
 func (g *Games) Get(pin int) (Game, error) {
