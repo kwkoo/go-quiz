@@ -7,6 +7,8 @@ package pkg
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -47,6 +49,8 @@ type Client struct {
 
 	// Buffered channel of outbound messages.
 	send chan []byte
+
+	sessionid string
 }
 
 // readPump pumps messages from the websocket connection to the hub.
@@ -71,7 +75,8 @@ func (c *Client) readPump() {
 			break
 		}
 		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
-		c.hub.broadcast <- message
+
+		c.hub.incomingcommands <- NewClientCommand(c, message)
 	}
 }
 
@@ -119,6 +124,75 @@ func (c *Client) writePump() {
 			}
 		}
 	}
+}
+
+func (c *Client) sendMessage(s string) {
+	c.send <- []byte(s)
+}
+
+func (c *Client) errorMessage(s string) {
+	c.sendMessage("error " + s)
+}
+
+func (c *Client) screen(s string) {
+	session := c.hub.sessions.GetSession(c.sessionid)
+	if session == nil {
+		c.errorMessage("session does not exist anymore")
+		return
+	}
+	switch s {
+	case "select-quiz":
+		type meta struct {
+			Id   int    `json:"id"`
+			Name string `json:"name"`
+		}
+		ml := []meta{}
+		for _, q := range c.hub.quizzes.GetQuizzes() {
+			ml = append(ml, meta{
+				Id:   q.Id,
+				Name: q.Name,
+			})
+		}
+
+		var b bytes.Buffer
+		enc := json.NewEncoder(&b)
+		if err := enc.Encode(&ml); err != nil {
+			c.errorMessage(fmt.Sprintf("error encoding json: %v", err))
+			return
+		}
+		c.sendMessage("all-quizzes " + b.String())
+	case "game-lobby":
+		// send over game object with lobby-game-metadata
+		game, err := c.hub.games.Get(session.gamepin)
+		if err != nil {
+			c.errorMessage(fmt.Sprintf("could not retrieve game %d", session.gamepin))
+			return
+		}
+
+		gameMetadata := struct {
+			Pin     int      `json:"pin"`
+			Host    string   `json:"host"`
+			Players []string `json:"players"`
+		}{
+			Pin:  game.Pin,
+			Host: game.Host, // todo: set to name
+		}
+		playerids := []string{}
+		for k := range game.Players {
+			playerids = append(playerids, k)
+		}
+		gameMetadata.Players = c.hub.sessions.ConvertSessionIdsToNames(playerids)
+
+		var b bytes.Buffer
+		enc := json.NewEncoder(&b)
+		if err := enc.Encode(&gameMetadata); err != nil {
+			c.errorMessage("JSON encoding error: " + err.Error())
+			return
+		}
+		c.sendMessage("lobby-game-metadata " + b.String())
+	}
+	c.hub.sessions.UpdateScreenForSession(c.sessionid, s)
+	c.sendMessage("screen " + s)
 }
 
 // ServeWs handles websocket requests from the peer.

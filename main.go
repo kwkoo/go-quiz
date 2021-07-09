@@ -38,10 +38,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if _, err := pkg.InitQuizzes(); err != nil {
-		log.Fatalf("error initializing quizzes: %v", err)
-	}
-
 	http.HandleFunc("/api/", handler)
 
 	var filesystem http.FileSystem
@@ -60,6 +56,13 @@ func main() {
 
 	cookieGen := pkg.InitCookieGenerator(http.FileServer(filesystem).ServeHTTP)
 	http.HandleFunc("/", cookieGen.ServeHTTP)
+
+	hub := pkg.NewHub()
+	go hub.Run()
+
+	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		pkg.ServeWs(hub, w, r)
+	})
 
 	log.Printf("Listening on port %v", config.Port)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", config.Port), nil))

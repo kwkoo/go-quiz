@@ -1,0 +1,27 @@
+body {
+    margin: 20px;
+    padding: 20px;
+}
+.grid-container {
+    display: grid;
+    grid-template-columns: auto auto;
+    padding: 5px;
+}
+.grid-label {
+    display: block;
+    /* text-align: center; */
+    font-size: 25px;
+    padding: 10px;
+    text-align: right;
+}
+.grid-value {
+    padding: 10px;
+    text-align: left;
+    /* color: blue; */
+}
+.final-row {
+    grid-column: 1 / span 2;
+    display: flex;
+    justify-content: center;
+    padding: 10px;
+}

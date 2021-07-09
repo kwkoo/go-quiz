@@ -1,26 +1,48 @@
+<!DOCTYPE html>
 <html>
-
 <head>
-    <title>Hello</title>
+  <title>My first Vue app</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://unpkg.com/vue"></script>
 </head>
-
 <body>
-    <h1>Hello</h1>
-    <script>
-        // copied from https://stackoverflow.com/a/10730417
-        function readCookie(name) {
-            var nameEQ = name + "=";
-            var ca = document.cookie.split(';');
-            for (var i = 0; i < ca.length; i++) {
-                var c = ca[i];
-                while (c.charAt(0) == ' ') c = c.substring(1, c.length);
-                if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length, c.length);
-            }
-            return null;
-        }
-
-        alert(readCookie('quizsession'));
-    </script>
+  <div id="app">
+    <div v-show="screen === 'start'">
+      {{ message }}
+    </div>
+    <div v-show="screen === 'enter-identity'">
+        <div class="grid-container">
+          <label class="grid-label">name</label>
+          <input class="grid-value" v-model="enteridentity.name">
+          <label class="grid-label">pin</label>
+          <input class="grid-value" v-model.number="enteridentity.pin" type="number">
+          <div class="final-row">
+            <button v-on:click="joinGame">Join Game</button>
+            <button v-on:click="sendCommand('host-game')">Host Game</button>
+          </div>
+        </div>
+    </div>
+    <div v-show="screen === 'select-quiz'">
+        <h1>Select Quiz</h1>
+        <ul>
+            <li v-for="quiz in selectquiz.quizzes">
+                <button v-on:click="selectQuiz(quiz.id)">{{ quiz.name }}</button>
+            </li>
+        </ul>
+    </div>
+    <div v-show="screen === 'game-lobby'">
+        <h1>Game Lobby</h1>
+        <h2>pin: {{ gamelobby.pin }}</h2>
+        <h2>Players</h2>
+        <ul>
+            <li v-for="player in gamelobby.players">{{ player }}</li>
+        </ul>
+    </div>
+    <div v-show="screen === 'wait-for-game-start'">Waiting for game to start...</div>
+    <div v-show="screen === 'error'">
+      {{ error.message }}
+    </div>
+  </div>
+  <script src="app.js"></script>
 </body>
-
 </html>

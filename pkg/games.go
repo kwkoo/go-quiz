@@ -3,6 +3,7 @@ package pkg
 import (
 	"errors"
 	"fmt"
+	"log"
 	"math/rand"
 	"sort"
 	"sync"
@@ -33,16 +34,16 @@ const (
 const winnerCount = 5
 
 type Game struct {
-	pin              int
-	host             string         // session ID of game host
-	players          map[string]int // scores of players
-	quiz             Quiz
-	questionIndex    int       // current question
-	questionDeadline time.Time // answers must come in at this time or before
-	correctPlayers   []string  // players that answered current question correctly
-	incorrectPlayers []string  // players that answered current question incorrectly
-	votes            []int     // number of players that answered each choice
-	gameState        int
+	Pin              int                 `json:"pin"`
+	Host             string              `json:"host"`    // session ID of game host
+	Players          map[string]int      `json:"players"` // scores of players
+	Quiz             Quiz                `json:"quiz"`
+	QuestionIndex    int                 `json:"questionindex"`    // current question
+	QuestionDeadline time.Time           `json:"questiondeadline"` // answers must come in at this time or before
+	CorrectPlayers   map[string]struct{} // players that answered current question correctly
+	IncorrectPlayers map[string]struct{} // players that answered current question incorrectly
+	Votes            []int               `json:"votes"` // number of players that answered each choice
+	GameState        int                 `json:"gamestate"`
 }
 
 type QuestionResults struct {
@@ -65,34 +66,34 @@ func (p PlayerScoreList) Len() int           { return len(p) }
 func (p PlayerScoreList) Less(i, j int) bool { return p[i].Score < p[j].Score }
 func (p PlayerScoreList) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
-func NewGame(host string) *Game {
-	return &Game{
-		host:    host,
-		players: make(map[string]int),
-	}
-}
-
 type Games struct {
 	mutex sync.RWMutex
-	g     map[int]*Game // map key is the game pin
+	all   map[int]*Game // map key is the game pin
 }
 
 func InitGames() *Games {
 	games := Games{
-		g: make(map[int]*Game),
+		all: make(map[int]*Game),
 	}
 	return &games
 }
 
-func (g *Games) Add(game Game) (Game, error) {
+func (g *Games) Add(host string) (Game, error) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
 
+	game := Game{
+		Host:             host,
+		Players:          make(map[string]int),
+		CorrectPlayers:   make(map[string]struct{}),
+		IncorrectPlayers: make(map[string]struct{}),
+	}
+
 	for i := 0; i < 5; i++ {
-		pin := rand.Intn(1000)
-		if _, ok := g.g[pin]; !ok {
-			game.pin = pin
-			g.g[pin] = &game
+		pin := rand.Intn(999) + 1
+		if _, ok := g.all[pin]; !ok {
+			game.Pin = pin
+			g.all[pin] = &game
 			return game, nil
 		}
 	}
@@ -102,108 +103,124 @@ func (g *Games) Add(game Game) (Game, error) {
 func (g *Games) Get(pin int) (Game, error) {
 	g.mutex.RLock()
 	defer g.mutex.RUnlock()
-	game, ok := g.g[pin]
+	game, ok := g.all[pin]
 	if !ok {
 		return Game{}, fmt.Errorf("could not find game with pin %d", pin)
 	}
 	return *game, nil
 }
 
+func (g *Games) GetHostForGame(pin int) string {
+	g.mutex.RLock()
+	defer g.mutex.RUnlock()
+	game, ok := g.all[pin]
+	if !ok {
+		return ""
+	}
+	return game.Host
+}
+
+func (g *Games) GetPlayersForGame(pin int) []string {
+	g.mutex.RLock()
+	defer g.mutex.RUnlock()
+	p := []string{}
+	game, ok := g.all[pin]
+	if !ok {
+		return p
+	}
+	for k := range game.Players {
+		p = append(p, k)
+	}
+	return p
+}
+
 func (g *Games) Update(game Game) error {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
-	_, ok := g.g[game.pin]
+	_, ok := g.all[game.Pin]
 	if !ok {
-		return fmt.Errorf("game with pin %d does not exist", game.pin)
+		return fmt.Errorf("game with pin %d does not exist", game.Pin)
 	}
-	g.g[game.pin] = &game
+	g.all[game.Pin] = &game
 	return nil
 }
 
 func (g *Games) Delete(pin int) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
-	delete(g.g, pin)
+	delete(g.all, pin)
 }
 
 func (g *Games) AddPlayerToGame(sessionid string, pin int) error {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
-	game, ok := g.g[pin]
+	game, ok := g.all[pin]
 	if !ok {
 		return fmt.Errorf("game with pin %d does not exist", pin)
 	}
-	if _, ok := game.players[sessionid]; ok {
+	if _, ok := game.Players[sessionid]; ok {
 		// player is already in the game
 		return nil
 	}
 
 	// player is new in this game
-	game.players[sessionid] = 0
+	log.Printf("### added player %s", sessionid)
+	game.Players[sessionid] = 0
+
 	return nil
 }
 
 func (g *Games) DeletePlayerFromGame(sessionid string, pin int) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
-	game, ok := g.g[pin]
+	game, ok := g.all[pin]
 	if !ok {
 		return
 	}
-	delete(game.players, sessionid)
-	game.correctPlayers = deleteItemFromSlice(sessionid, game.correctPlayers)
-	game.incorrectPlayers = deleteItemFromSlice(sessionid, game.incorrectPlayers)
-}
-
-func deleteItemFromSlice(item string, old []string) []string {
-	var modified []string
-	for _, value := range old {
-		if value != item {
-			modified = append(modified, value)
-		}
-	}
-	return modified
+	delete(game.Players, sessionid)
+	delete(game.CorrectPlayers, sessionid)
+	delete(game.IncorrectPlayers, sessionid)
 }
 
 // Advances the game state to the next state - returns the new state
 func (g *Games) NextState(pin int) (int, error) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
-	game, ok := g.g[pin]
+	game, ok := g.all[pin]
 	if !ok {
 		return 0, fmt.Errorf("game with pin %d does not exist", pin)
 	}
-	switch game.gameState {
+	switch game.GameState {
 	case GameNotStarted:
 		// if there are no questions or players, end the game immediately
-		if game.quiz.NumQuestions() == 0 || len(game.players) == 0 {
-			game.gameState = GameEnded
-			return game.gameState, nil
+		if game.Quiz.NumQuestions() == 0 || len(game.Players) == 0 {
+			game.GameState = GameEnded
+			return game.GameState, nil
 		}
 		if err := game.setupQuestion(0); err != nil {
-			game.gameState = GameEnded
-			return game.gameState, fmt.Errorf("error trying to start game: %v", err)
+			game.GameState = GameEnded
+			return game.GameState, fmt.Errorf("error trying to start game: %v", err)
 		}
-		return game.gameState, nil
+		return game.GameState, nil
 	case QuestionInProgress:
-		game.gameState = ShowResults
-		return game.gameState, nil
+		game.GameState = ShowResults
+		return game.GameState, nil
 	case ShowResults:
-		if game.questionIndex < game.quiz.NumQuestions() {
-			game.questionIndex++
+		if game.QuestionIndex < game.Quiz.NumQuestions() {
+			game.QuestionIndex++
 		}
-		if game.questionIndex >= game.quiz.NumQuestions() {
-			game.gameState = GameEnded
-			return game.gameState, nil
+		if game.QuestionIndex >= game.Quiz.NumQuestions() {
+			game.GameState = GameEnded
+			return game.GameState, nil
 		}
-		if err := game.setupQuestion(game.questionIndex); err != nil {
-			game.gameState = GameEnded
-			return game.gameState, err
+		if err := game.setupQuestion(game.QuestionIndex); err != nil {
+			game.GameState = GameEnded
+			return game.GameState, err
 		}
-		return game.gameState, nil
+		return game.GameState, nil
 	default:
-		game.gameState = GameEnded
-		return game.gameState, nil
+		game.GameState = GameEnded
+		return game.GameState, nil
 	}
 }
 
@@ -213,28 +230,28 @@ func (g *Games) NextState(pin int) (int, error) {
 func (g *Games) ShowResults(pin int) error {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
-	game, ok := g.g[pin]
+	game, ok := g.all[pin]
 	if !ok {
 		return fmt.Errorf("game with pin %d does not exist", pin)
 	}
-	if game.gameState != QuestionInProgress && game.gameState != ShowResults {
+	if game.GameState != QuestionInProgress && game.GameState != ShowResults {
 		return fmt.Errorf("game with pin %d is not in the expected states", pin)
 	}
-	game.gameState = ShowResults
+	game.GameState = ShowResults
 	return nil
 }
 
 func (g *Game) setupQuestion(newIndex int) error {
-	g.questionIndex = newIndex
-	question, err := g.quiz.GetQuestion(newIndex)
+	g.QuestionIndex = newIndex
+	question, err := g.Quiz.GetQuestion(newIndex)
 	if err != nil {
 		return err
 	}
-	g.gameState = QuestionInProgress
-	g.correctPlayers = []string{}
-	g.incorrectPlayers = []string{}
-	g.votes = make([]int, question.NumAnswers())
-	g.questionDeadline = time.Now().Add(time.Second * time.Duration(g.quiz.QuestionDuration))
+	g.GameState = QuestionInProgress
+	g.CorrectPlayers = make(map[string]struct{})
+	g.IncorrectPlayers = make(map[string]struct{})
+	g.Votes = make([]int, question.NumAnswers())
+	g.QuestionDeadline = time.Now().Add(time.Second * time.Duration(g.Quiz.QuestionDuration))
 	return nil
 }
 
@@ -242,43 +259,43 @@ func (g *Game) setupQuestion(newIndex int) error {
 func (g *Games) GetCurrentQuestion(pin int) (int, int, QuizQuestion, error) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
-	game, ok := g.g[pin]
+	game, ok := g.all[pin]
 	if !ok {
 		return 0, 0, QuizQuestion{}, fmt.Errorf("game with pin %d does not exist", pin)
 	}
 
-	if game.gameState != QuestionInProgress {
+	if game.GameState != QuestionInProgress {
 		return 0, 0, QuizQuestion{}, fmt.Errorf("game with pin %d is not showing a live question", pin)
 	}
 
 	now := time.Now()
-	timeLeft := int(game.questionDeadline.Unix() - now.Unix())
-	if timeLeft <= 0 || (len(game.correctPlayers)+len(game.incorrectPlayers)) >= len(game.players) {
-		game.gameState = ShowResults
+	timeLeft := int(game.QuestionDeadline.Unix() - now.Unix())
+	if timeLeft <= 0 || (len(game.CorrectPlayers)+len(game.IncorrectPlayers)) >= len(game.Players) {
+		game.GameState = ShowResults
 		return 0, 0, QuizQuestion{}, fmt.Errorf("game with pin %d should be showing results", pin)
 	}
 
-	question, err := game.quiz.GetQuestion(game.questionIndex)
+	question, err := game.Quiz.GetQuestion(game.QuestionIndex)
 	if err != nil {
 		return 0, 0, QuizQuestion{}, err
 	}
 
-	return game.questionIndex, timeLeft, question, nil
+	return game.QuestionIndex, timeLeft, question, nil
 }
 
 func (g *Games) GetAnsweredCount(pin int) (int, int, error) {
 	g.mutex.RLock()
 	defer g.mutex.RUnlock()
-	game, ok := g.g[pin]
+	game, ok := g.all[pin]
 	if !ok {
 		return 0, 0, fmt.Errorf("game with pin %d does not exist", pin)
 	}
 
-	if game.gameState != QuestionInProgress {
+	if game.GameState != QuestionInProgress {
 		return 0, 0, fmt.Errorf("game with pin %d is not showing a live question", pin)
 	}
 
-	return len(game.correctPlayers) + len(game.incorrectPlayers), len(game.players), nil
+	return len(game.CorrectPlayers) + len(game.IncorrectPlayers), len(game.Players), nil
 }
 
 // Results:
@@ -289,24 +306,24 @@ func (g *Games) GetAnsweredCount(pin int) (int, int, error) {
 func (g *Games) RegisterAnswer(pin int, sessionid string, answerIndex int) (bool, int, int, error) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
-	game, ok := g.g[pin]
+	game, ok := g.all[pin]
 	if !ok {
 		return false, 0, 0, fmt.Errorf("game with pin %d does not exist", pin)
 	}
-	if _, ok := game.players[sessionid]; !ok {
+	if _, ok := game.Players[sessionid]; !ok {
 		return false, 0, 0, fmt.Errorf("player %s is not part of game %d", sessionid, pin)
 	}
-	if game.gameState != QuestionInProgress {
+	if game.GameState != QuestionInProgress {
 		return false, 0, 0, fmt.Errorf("game %d is not showing a live question", pin)
 	}
 
 	now := time.Now()
-	if now.After(game.questionDeadline) {
-		game.gameState = ShowResults
-		return false, 0, 0, fmt.Errorf("question %d in game %d has expired", game.questionIndex, pin)
+	if now.After(game.QuestionDeadline) {
+		game.GameState = ShowResults
+		return false, 0, 0, fmt.Errorf("question %d in game %d has expired", game.QuestionIndex, pin)
 	}
 
-	question, err := game.quiz.GetQuestion(game.questionIndex)
+	question, err := game.Quiz.GetQuestion(game.QuestionIndex)
 	if err != nil {
 		return false, 0, 0, err
 	}
@@ -318,19 +335,19 @@ func (g *Games) RegisterAnswer(pin int, sessionid string, answerIndex int) (bool
 	if answerIndex == question.Correct {
 		// calculate score, add to player score
 		// add player to correct answers list
-		game.correctPlayers = append(game.correctPlayers, sessionid)
-		game.players[sessionid] += calculateScore(int(game.questionDeadline.Unix()-now.Unix()), game.quiz.QuestionDuration)
+		game.CorrectPlayers[sessionid] = struct{}{}
+		game.Players[sessionid] += calculateScore(int(game.QuestionDeadline.Unix()-now.Unix()), game.Quiz.QuestionDuration)
 	} else {
 		// add player to incorrect answers list
-		game.incorrectPlayers = append(game.incorrectPlayers, sessionid)
+		game.IncorrectPlayers[sessionid] = struct{}{}
 	}
-	game.votes[answerIndex]++
+	game.Votes[answerIndex]++
 
-	answeredCount := len(game.correctPlayers) + len(game.incorrectPlayers)
-	totalPlayers := len(game.players)
+	answeredCount := len(game.CorrectPlayers) + len(game.IncorrectPlayers)
+	totalPlayers := len(game.Players)
 	allAnswered := answeredCount >= totalPlayers
 	if allAnswered {
-		game.gameState = ShowResults
+		game.GameState = ShowResults
 	}
 	return allAnswered, answeredCount, totalPlayers, nil
 }
@@ -339,21 +356,28 @@ func (g *Games) RegisterAnswer(pin int, sessionid string, answerIndex int) (bool
 func (g *Games) GetQuestionResults(pin int) (QuestionResults, error) {
 	g.mutex.RLock()
 	defer g.mutex.RUnlock()
-	game, ok := g.g[pin]
+	game, ok := g.all[pin]
 	if !ok {
 		return QuestionResults{}, fmt.Errorf("game with pin %d does not exist", pin)
 	}
-	question, err := game.quiz.GetQuestion(game.questionIndex)
+	question, err := game.Quiz.GetQuestion(game.QuestionIndex)
 	if err != nil {
 		return QuestionResults{}, err
 	}
 	results := QuestionResults{
-		QuestionIndex:    game.questionIndex,
+		QuestionIndex:    game.QuestionIndex,
 		Question:         question,
-		Scores:           game.players,
-		CorrectPlayers:   game.correctPlayers,
-		IncorrectPlayers: game.incorrectPlayers,
-		Votes:            game.votes,
+		Scores:           game.Players,
+		CorrectPlayers:   []string{},
+		IncorrectPlayers: []string{},
+		Votes:            game.Votes,
+	}
+
+	for k := range game.CorrectPlayers {
+		results.CorrectPlayers = append(results.CorrectPlayers, k)
+	}
+	for k := range game.IncorrectPlayers {
+		results.IncorrectPlayers = append(results.IncorrectPlayers, k)
 	}
 	return results, nil
 }
@@ -361,15 +385,15 @@ func (g *Games) GetQuestionResults(pin int) (QuestionResults, error) {
 func (g *Games) GetWinners(pin int) ([]PlayerScore, error) {
 	g.mutex.RLock()
 	defer g.mutex.RUnlock()
-	game, ok := g.g[pin]
+	game, ok := g.all[pin]
 	if !ok {
 		return []PlayerScore{}, fmt.Errorf("game with pin %d does not exist", pin)
 	}
 
 	// copied from https://stackoverflow.com/a/18695740
-	pl := make(PlayerScoreList, len(game.players))
+	pl := make(PlayerScoreList, len(game.Players))
 	i := 0
-	for k, v := range game.players {
+	for k, v := range game.Players {
 		pl[i] = PlayerScore{k, v}
 		i++
 	}
@@ -385,11 +409,11 @@ func (g *Games) GetWinners(pin int) ([]PlayerScore, error) {
 func (g *Games) GetGameState(pin int) (int, error) {
 	g.mutex.RLock()
 	defer g.mutex.RUnlock()
-	game, ok := g.g[pin]
+	game, ok := g.all[pin]
 	if !ok {
 		return 0, fmt.Errorf("game with pin %d does not exist", pin)
 	}
-	return game.gameState, nil
+	return game.GameState, nil
 }
 
 func calculateScore(timeLeft, questionDuration int) int {

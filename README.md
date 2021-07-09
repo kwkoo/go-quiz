@@ -7,12 +7,21 @@ A Kahoot clone.
 * [gorilla websocket example](https://github.com/gorilla/websocket/tree/master/examples/chat)
 
 
+## To-Do
+
+* let host start game
+* broadcast question to game participants
+
+
 ## Quiz Host Messages
 
 * *host starts in connecting to server screen*
 * host → server: session SESSION-ID
+* server → host: screen enter-identity
+* *host clicks on host a game*
+* host → server: host-game
 * server → host: all-quizzes [{"id":1,"name":"Quiz 1"},{"id":2,"name":"Quiz 2"}]
-* server → host: screen select-quizzes
+* server → host: screen select-quiz
 * host → server: game-lobby 1
 * server → host: lobby-game-metadata {"id":1,"name":"Quiz 1","pin":1234}
 * server → host: screen game-lobby

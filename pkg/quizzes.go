@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -37,7 +38,7 @@ func (q Quiz) GetQuestion(i int) (QuizQuestion, error) {
 }
 
 type Quizzes struct {
-	q     map[int]Quiz
+	all   map[int]Quiz
 	mutex sync.RWMutex
 }
 
@@ -51,20 +52,41 @@ func InitQuizzes() (*Quizzes, error) {
 	}
 
 	quizzes := &Quizzes{
-		q: make(map[int]Quiz),
+		all: make(map[int]Quiz),
 	}
 	for _, quiz := range q {
-		quizzes.q[quiz.Id] = quiz
+		quizzes.all[quiz.Id] = quiz
 	}
 
-	log.Printf("ingested %d quizzes", len(quizzes.q))
+	log.Printf("ingested %d quizzes", len(quizzes.all))
 	return quizzes, nil
+}
+
+func (q *Quizzes) GetQuizzes() []Quiz {
+	q.mutex.RLock()
+	defer q.mutex.RUnlock()
+	//ids := []int{}
+	ids := make([]int, len(q.all))
+
+	i := 0
+	for k := range q.all {
+		ids[i] = k
+		i++
+	}
+	sort.Ints(ids)
+
+	//r := []Quiz{}
+	r := make([]Quiz, len(ids))
+	for i, id := range ids {
+		r[i] = q.all[id]
+	}
+	return r
 }
 
 func (q *Quizzes) Get(id int) (Quiz, error) {
 	q.mutex.RLock()
 	defer q.mutex.RUnlock()
-	quiz, ok := q.q[id]
+	quiz, ok := q.all[id]
 	if !ok {
 		return Quiz{}, fmt.Errorf("could not find quiz with id %d", id)
 	}
@@ -74,30 +96,30 @@ func (q *Quizzes) Get(id int) (Quiz, error) {
 func (q *Quizzes) Delete(id int) {
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
-	delete(q.q, id)
+	delete(q.all, id)
 }
 
 func (q *Quizzes) Add(quiz Quiz) (Quiz, error) {
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
 	quiz.Id = q.nextID()
-	q.q[quiz.Id] = quiz
+	q.all[quiz.Id] = quiz
 	return quiz, nil
 }
 
 func (q *Quizzes) Update(quiz Quiz) error {
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
-	if _, ok := q.q[quiz.Id]; !ok {
+	if _, ok := q.all[quiz.Id]; !ok {
 		return fmt.Errorf("quiz id %d does not exist", quiz.Id)
 	}
-	q.q[quiz.Id] = quiz
+	q.all[quiz.Id] = quiz
 	return nil
 }
 
 func (q *Quizzes) nextID() int {
 	highest := 0
-	for key := range q.q {
+	for key := range q.all {
 		if key > highest {
 			highest = key
 		}
