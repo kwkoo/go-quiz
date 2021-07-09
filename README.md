@@ -9,8 +9,11 @@ A Kahoot clone.
 
 ## To-Do
 
-* let host start game
-* broadcast question to game participants
+* players answer
+* process players answer - move player to wait screen
+* host show question results
+* host move to next question
+* host show game results
 
 
 ## Quiz Host Messages
@@ -59,6 +62,7 @@ A Kahoot clone.
 * server → player: screen enter-identity
 * player → server: join-game {"pin": 1234, "name": "user1"}
 * server → player: screen wait-for-game-start
+* server → player: display-choices 4
 * server → player: screen answer-question
 * player → server: answer 2
 * server → player: screen wait-for-question-end

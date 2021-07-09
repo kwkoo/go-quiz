@@ -30,6 +30,9 @@ function processIncoming(app, s) {
         case 'screen':
             app.screen = arg
             break
+        case 'display-choices':
+            app.answerquestion = parseInt(arg)
+            break
         case 'all-quizzes':
             try {
                 app.selectquiz.quizzes = JSON.parse(arg)
@@ -51,6 +54,24 @@ function processIncoming(app, s) {
                 console.log('err: ' + err)
             }
             break
+        case 'show-question':
+            try {
+                app.showquestion = JSON.parse(arg)
+
+                if (app.showquestion && app.showquestion.timeleft) {
+                    app.timer = setInterval(function() {
+                        if (app.showquestion && app.showquestion.timeleft > 0) {
+                            app.showquestion.timeleft--
+
+                            if (app.showquestion.timeleft == 0) {
+                                app.stopCountdown()
+                            }
+                        }
+                    }, 1000)
+                }
+            } catch (err) {
+                console.log('err: ' + err)
+            }
         default:
             console.log('oops!')
     }
@@ -65,6 +86,10 @@ var app = new Vue({
         selectquiz: {},
         gamelobby: { pin: 0, players: [] },
         enteridentity: { pin: 0, name: ''},
+        answerquestion: 0,
+        showquestion: { questionindex: 0, timeleft: 0, question: '', answers: [] },
+        timer: null,
+        timesUp: false,
         error: { message: '' },
         sessionid: '',
         conn: {}
@@ -114,12 +139,15 @@ var app = new Vue({
         },
         joinGame: function() {
             this.sendCommand('join-game ' + JSON.stringify({name: this.enteridentity.name, pin: this.enteridentity.pin}))
-
         },
-        parse: function() {
-            let arg = '[{"id":1,"string":"Session 1 - Best Practices"},{"id":2,"string":"Session 2 - Quarkus"},{"id":3,"string":"Session 3 - Event Driven"},{"id":4,"string":"Session 4 - Keycloak"}]'
-            let obj = JSON.parse(arg)
-            console.log(obj)
-        }
+        stopCountdown: function() {
+            if (this.timer != null) {
+                clearInterval(this.timer)
+                this.timer = null
+            }
+            console.log('stop timer ' + this.timesUp)
+            this.timesUp = true
+            console.log('after stop timer ' + this.timesUp)
+        },
     }
 })

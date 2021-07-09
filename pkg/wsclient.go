@@ -161,6 +161,7 @@ func (c *Client) screen(s string) {
 			return
 		}
 		c.sendMessage("all-quizzes " + b.String())
+
 	case "game-lobby":
 		// send over game object with lobby-game-metadata
 		game, err := c.hub.games.Get(session.gamepin)
@@ -190,9 +191,53 @@ func (c *Client) screen(s string) {
 			return
 		}
 		c.sendMessage("lobby-game-metadata " + b.String())
+
+	case "show-question":
+		session := c.hub.sessions.GetSession(c.sessionid)
+		if session == nil {
+			c.errorMessage("could not get session")
+			return
+		}
+		questionIndex, secondsLeft, quizQuestion, err := c.hub.games.GetCurrentQuestion(session.gamepin)
+		if err != nil {
+			c.errorMessage("error retrieving question: " + err.Error())
+			return
+		}
+		hostQuestion := struct {
+			QuestionIndex int      `json:"questionindex"`
+			TimeLeft      int      `json:"timeleft"`
+			Question      string   `json:"question"`
+			Answers       []string `json:"answers"`
+		}{
+			QuestionIndex: questionIndex,
+			TimeLeft:      secondsLeft,
+			Question:      quizQuestion.Question,
+			Answers:       quizQuestion.Answers,
+		}
+
+		encoded, err := convertToJSON(&hostQuestion)
+		if err != nil {
+			c.errorMessage("error converting question to JSON: " + err.Error())
+			return
+		}
+		c.sendMessage("show-question " + encoded)
+
+		// The logic for answer-question is in the hub
+		//case "answer-question":
+
 	}
+
 	c.hub.sessions.UpdateScreenForSession(c.sessionid, s)
 	c.sendMessage("screen " + s)
+}
+
+func convertToJSON(input interface{}) (string, error) {
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
+	if err := enc.Encode(input); err != nil {
+		return "", err
+	}
+	return b.String(), nil
 }
 
 // ServeWs handles websocket requests from the peer.

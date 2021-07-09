@@ -13,7 +13,7 @@
             "remotePath": "",
             "port": 2345,
             "host": "127.0.0.1",
-            "program": "${fileDirname}",
+            "program": "${workspaceFolder}",
             "env": {},
             "args": [
                 //"-test.v",

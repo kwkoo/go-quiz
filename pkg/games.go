@@ -78,7 +78,7 @@ func InitGames() *Games {
 	return &games
 }
 
-func (g *Games) Add(host string) (Game, error) {
+func (g *Games) Add(host string) (int, error) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
 
@@ -94,10 +94,10 @@ func (g *Games) Add(host string) (Game, error) {
 		if _, ok := g.all[pin]; !ok {
 			game.Pin = pin
 			g.all[pin] = &game
-			return game, nil
+			return pin, nil
 		}
 	}
-	return Game{}, errors.New("could not generate unique game pin")
+	return 0, errors.New("could not generate unique game pin")
 }
 
 func generatePin() int {
@@ -178,6 +178,16 @@ func (g *Games) AddPlayerToGame(sessionid string, pin int) error {
 	game.Players[sessionid] = 0
 
 	return nil
+}
+
+func (g *Games) SetGameQuiz(pin int, quiz Quiz) {
+	g.mutex.Lock()
+	defer g.mutex.Unlock()
+	game, ok := g.all[pin]
+	if !ok {
+		return
+	}
+	game.Quiz = quiz
 }
 
 func (g *Games) DeletePlayerFromGame(sessionid string, pin int) {
