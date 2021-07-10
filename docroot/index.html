@@ -7,9 +7,11 @@
 </head>
 <body>
   <div id="app">
+
     <div v-show="screen === 'start'">
       Connecting to server...
     </div>
+
     <div v-show="screen === 'enter-identity'">
         <div class="grid-container">
           <label class="grid-label">name</label>
@@ -17,12 +19,16 @@
           <label class="grid-label">pin</label>
           <input class="grid-value" v-model.number="enteridentity.pin" type="number">
           <div class="final-row">
-            <button v-on:click="joinGame">Join Game</button>
-            <button v-on:click="sendCommand('host-game')">Host Game</button>
+            <button :disabled='enteridentitydisabled' v-on:click="joinGame">Join Game</button>
+            <button :disabled='enteridentitydisabled' v-on:click="hostGame">Host Game</button>
           </div>
         </div>
     </div>
-    <div v-show="screen === 'wait-for-game-start'">Waiting for game to start...</div>
+
+    <div v-show="screen === 'wait-for-game-start'">
+      Waiting for game to start...
+    </div>
+
     <div v-show="screen === 'answer-question'">
       Enter Answer
       <ul>
@@ -32,7 +38,11 @@
         <li :disabled='answerquestion.disabled' v-if="answerquestion.answercount > 3" v-on:click="sendAnswer(3)"><button>Answer 4</button></li>
       </ul>
     </div>
-    <div v-show="screen === 'wait-for-question-end'">Waiting for all players to answer...</div>
+
+    <div v-show="screen === 'wait-for-question-end'">
+      Waiting for all players to answer...
+    </div>
+
     <div v-show="screen === 'display-player-results'">
       <ul>
         <li>correct: {{ displayplayerresults.correct }}</li>
@@ -41,14 +51,16 @@
     </div>
 
     <!-- Host Screens -->
+
     <div v-show="screen === 'select-quiz'">
         <h1>Select Quiz</h1>
         <ul>
             <li v-for="quiz in selectquiz.quizzes">
-                <button v-on:click="selectQuiz(quiz.id)">{{ quiz.name }}</button>
+                <button :disabled='selectquizdisabled' v-on:click="selectQuiz(quiz.id)">{{ quiz.name }}</button>
             </li>
         </ul>
     </div>
+
     <div v-show="screen === 'game-lobby'">
         <h1>Game Lobby</h1>
         <h2>{{ gamelobby.name }}</h2>
@@ -57,8 +69,9 @@
         <ul>
             <li v-for="player in gamelobby.players">{{ player }}</li>
         </ul>
-        <button v-on:click="sendCommand('start-game')">Start Game</button>
+        <button :disabled='gamelobbydisabled' v-on:click="startGame">Start Game</button>
     </div>
+
     <div v-show="screen === 'show-question'">
       <ul>
         <li>Time Left: {{ showquestion.timeleft }}</li>
@@ -71,6 +84,7 @@
         <li v-if="showquestion.answers.length > 3">Answer 4: {{ showquestion.answers[3] }}</li>
       </ul>
     </div>
+
     <div v-show="screen === 'show-question-results'">
       Question Results
       <ul>
@@ -80,18 +94,21 @@
         <li>Question: {{ showquestionresults.question }}</li>
         <li v-for="(answer, index) in showquestionresults.answers"><span v-if="showquestionresults.correct == index">✓</span>{{ answer }}</li>
       </ul>
-      <button :disabled="showquestionresultsbuttondisabled" v-on:click="hostNextQuestion">Next Question</button>
+      <button :disabled="showquestionresultsdisabled" v-on:click="hostNextQuestion">Next Question</button>
     </div>
+
     <div v-show="screen === 'show-game-results'">
       Winners Here
       <ul>
         <li v-for="(p, index) in showgameresults">{{ index + 1 }}. {{ p.name }} - {{ p.score }}</li>
       </ul>
-      <button :disabled="showgameresultsbuttondisabled" v-on:click="deleteGame">Delete Game</button>
+      <button :disabled="showgameresultsdisabled" v-on:click="deleteGame">Delete Game</button>
     </div>
+
     <div v-show="screen === 'error'">
       {{ error.message }}
     </div>
+
   </div>
   <script src="app.js"></script>
 </body>
