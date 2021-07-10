@@ -19,18 +19,15 @@ func InitCookieGenerator(next func(w http.ResponseWriter, r *http.Request)) *Coo
 
 func (s CookieGenerator) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// copied from https://medium.com/wesionary-team/cookies-and-session-management-using-cookies-in-go-7801f935a1c8
-	cookie, err := r.Cookie(cookieKey)
-	if err != nil {
+	if _, err := r.Cookie(cookieKey); err != nil {
 		id, _ := uuid.NewRandom()
-		cookie = &http.Cookie{
+		cookie := &http.Cookie{
 			Name:  cookieKey,
 			Value: id.String(),
 			Path:  "/",
 		}
+		log.Printf("cookie not found - generating new cookie %s", id)
 		http.SetCookie(w, cookie)
-		log.Printf("generated new cookie %s", cookie)
-	} else {
-		log.Printf("got cookie %s", cookie)
 	}
 	s.next(w, r)
 }

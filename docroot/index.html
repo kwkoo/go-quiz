@@ -8,7 +8,7 @@
 <body>
   <div id="app">
     <div v-show="screen === 'start'">
-      {{ message }}
+      Connecting to server...
     </div>
     <div v-show="screen === 'enter-identity'">
         <div class="grid-container">
@@ -35,8 +35,8 @@
     <div v-show="screen === 'wait-for-question-end'">Waiting for all players to answer...</div>
     <div v-show="screen === 'display-player-results'">
       <ul>
-        <li>correct: true</li>
-        <li>score: 0</li>
+        <li>correct: {{ displayplayerresults.correct }}</li>
+        <li>score: {{ displayplayerresults.score }}</li>
       </ul>
     </div>
 
@@ -51,6 +51,7 @@
     </div>
     <div v-show="screen === 'game-lobby'">
         <h1>Game Lobby</h1>
+        <h2>{{ gamelobby.name }}</h2>
         <h2>pin: {{ gamelobby.pin }}</h2>
         <h2>Players</h2>
         <ul>
@@ -83,6 +84,10 @@
     </div>
     <div v-show="screen === 'show-game-results'">
       Winners Here
+      <ul>
+        <li v-for="(p, index) in showgameresults">{{ index + 1 }}. {{ p.name }} - {{ p.score }}</li>
+      </ul>
+      <button :disabled="showgameresultsbuttondisabled" v-on:click="deleteGame">Delete Game</button>
     </div>
     <div v-show="screen === 'error'">
       {{ error.message }}

@@ -1,7 +1,6 @@
 package pkg
 
 import (
-	"crypto/rand"
 	"errors"
 	"fmt"
 	"log"
@@ -41,10 +40,9 @@ type Game struct {
 	QuestionIndex    int            `json:"questionindex"`    // current question
 	QuestionDeadline time.Time      `json:"questiondeadline"` // answers must come in at this time or before
 	PlayersAnswered  map[string]struct{}
-	//CorrectPlayers   map[string]struct{} // players that answered current question correctly
-	//IncorrectPlayers map[string]struct{} // players that answered current question incorrectly
-	Votes     []int `json:"votes"` // number of players that answered each choice
-	GameState int   `json:"gamestate"`
+	CorrectPlayers   map[string]struct{} // players that answered current question correctly
+	Votes            []int               `json:"votes"` // number of players that answered each choice
+	GameState        int                 `json:"gamestate"`
 }
 
 // Queried by the host - either when the host first displays the question or
@@ -112,13 +110,17 @@ func (g *Games) Add(host string) (int, error) {
 }
 
 func generatePin() int {
-	b := make([]byte, 4)
-	rand.Read(b)
+	return 0
+	// todo: commented this out to make testing easier
+	/*
+		b := make([]byte, 4)
+		rand.Read(b)
 
-	total := int(b[0]) + int(b[1]) + int(b[2]) + int(b[3])
-	total = total % 998
-	total++
-	return total
+		total := int(b[0]) + int(b[1]) + int(b[2]) + int(b[3])
+		total = total % 998
+		total++
+		return total
+	*/
 }
 
 func (g *Games) Get(pin int) (Game, error) {
@@ -232,9 +234,11 @@ func (g *Games) NextState(pin int) (int, error) {
 			return game.GameState, fmt.Errorf("error trying to start game: %v", err)
 		}
 		return game.GameState, nil
+
 	case QuestionInProgress:
 		game.GameState = ShowResults
 		return game.GameState, nil
+
 	case ShowResults:
 		if game.QuestionIndex < game.Quiz.NumQuestions() {
 			game.QuestionIndex++
@@ -247,7 +251,9 @@ func (g *Games) NextState(pin int) (int, error) {
 			game.GameState = GameEnded
 			return game.GameState, err
 		}
+		// setupQuestion() would have set the GameState to QuestionInProgress
 		return game.GameState, nil
+
 	default:
 		game.GameState = GameEnded
 		return game.GameState, nil
@@ -279,6 +285,7 @@ func (g *Game) setupQuestion(newIndex int) error {
 	}
 	g.GameState = QuestionInProgress
 	g.PlayersAnswered = make(map[string]struct{})
+	g.CorrectPlayers = make(map[string]struct{})
 	g.Votes = make([]int, question.NumAnswers())
 	g.QuestionDeadline = time.Now().Add(time.Second * time.Duration(g.Quiz.QuestionDuration))
 	return nil
@@ -375,6 +382,7 @@ func (g *Games) RegisterAnswer(pin int, sessionid string, answerIndex int) (bool
 		if answerIndex == question.Correct {
 			// calculate score, add to player score
 			game.Players[sessionid] += calculateScore(int(game.QuestionDeadline.Unix()-now.Unix()), game.Quiz.QuestionDuration)
+			game.CorrectPlayers[sessionid] = struct{}{}
 		}
 		game.Votes[answerIndex]++
 	}

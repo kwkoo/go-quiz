@@ -9,9 +9,6 @@ A Kahoot clone.
 
 ## To-Do
 
-* host show question results
-* host move to next question
-* host show game results
 * disable buttons on each screen once an action has been taken
 * enable buttons on screen before showing that screen
 * ensure user is admin when accessing hosting functions
@@ -56,7 +53,7 @@ A Kahoot clone.
 * server → host: screen show-game-results
 * host → server: delete-game
 * server → host: all-quizzes [{"id":1,"name":"Quiz 1"},{"id":2,"name":"Quiz 2"}]
-* server → host: screen select-quizzes
+* server → host: screen select-quiz
 
 
 ## Player Messages

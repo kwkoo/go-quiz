@@ -172,11 +172,13 @@ func (c *Client) screen(s string) {
 
 		gameMetadata := struct {
 			Pin     int      `json:"pin"`
+			Name    string   `json:"name"`
 			Host    string   `json:"host"`
 			Players []string `json:"players"`
 		}{
 			Pin:  game.Pin,
-			Host: game.Host, // todo: set to name
+			Name: game.Quiz.Name,
+			Host: game.Host,
 		}
 		playerids := []string{}
 		for k := range game.Players {
@@ -184,13 +186,12 @@ func (c *Client) screen(s string) {
 		}
 		gameMetadata.Players = c.hub.sessions.ConvertSessionIdsToNames(playerids)
 
-		var b bytes.Buffer
-		enc := json.NewEncoder(&b)
-		if err := enc.Encode(&gameMetadata); err != nil {
-			c.errorMessage("JSON encoding error: " + err.Error())
+		encoded, err := convertToJSON(&gameMetadata)
+		if err != nil {
+			c.errorMessage("error converting lobby-game-metadata payload to JSON: " + err.Error())
 			return
 		}
-		c.sendMessage("lobby-game-metadata " + b.String())
+		c.sendMessage("lobby-game-metadata " + encoded)
 
 	case "show-question":
 		session := c.hub.sessions.GetSession(c.sessionid)
@@ -215,6 +216,42 @@ func (c *Client) screen(s string) {
 		// The logic for answer-question is in the hub
 		//case "answer-question":
 
+	case "show-game-results":
+		session := c.hub.sessions.GetSession(c.sessionid)
+		if session == nil {
+			c.errorMessage("could not get session")
+			return
+		}
+
+		winners, err := c.hub.games.GetWinners(session.gamepin)
+		if err != nil {
+			c.errorMessage("error retrieving game winners: " + err.Error())
+			return
+		}
+		type FriendlyScore struct {
+			Name  string `json:"name"`
+			Score int    `json:"score"`
+		}
+		fl := []FriendlyScore{}
+		for _, w := range winners {
+			session := c.hub.sessions.GetSession(w.Sessionid)
+			if session == nil {
+				// player session doesn't exist anymore
+				continue
+			}
+			fl = append(fl, FriendlyScore{
+				Name:  session.name,
+				Score: w.Score,
+			})
+		}
+		encoded, err := convertToJSON(&fl)
+		if err != nil {
+			c.errorMessage("error converting show-winners payload to JSON: " + err.Error())
+			return
+		}
+		c.sendMessage("show-winners " + encoded)
+
+		// end of switch
 	}
 
 	c.hub.sessions.UpdateScreenForSession(c.sessionid, s)

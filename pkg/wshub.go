@@ -8,6 +8,7 @@ package pkg
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"strconv"
@@ -197,21 +198,12 @@ func (h *Hub) processMessage(m *ClientCommand) {
 		m.client.screen("game-lobby")
 
 	case "start-game":
-		session := h.sessions.GetSession(m.client.sessionid)
-		if session == nil {
-			m.client.errorMessage("session does not exist")
-			return
-		}
-		game, err := h.games.Get(session.gamepin)
+		game, err := h.ensureUserIsGameHost(m)
 		if err != nil {
-			m.client.errorMessage("error retrieving game: " + err.Error())
+			m.client.errorMessage(err.Error())
 			return
 		}
-		if game.Host != m.client.sessionid {
-			m.client.errorMessage("you are not the host")
-			return
-		}
-		gameState, err := h.games.NextState(session.gamepin)
+		gameState, err := h.games.NextState(game.Pin)
 		if err != nil {
 			m.client.errorMessage("error starting game: " + err.Error())
 			return
@@ -221,28 +213,19 @@ func (h *Hub) processMessage(m *ClientCommand) {
 			return
 		}
 		m.client.screen("show-question")
-		h.sendGamePlayersToAnswerQuestionScreen(session.gamepin)
+		h.sendGamePlayersToAnswerQuestionScreen(game.Pin)
 
 	case "show-results":
-		session := h.sessions.GetSession(m.client.sessionid)
-		if session == nil {
-			m.client.errorMessage("session does not exist")
-			return
-		}
-		game, err := h.games.Get(session.gamepin)
+		game, err := h.ensureUserIsGameHost(m)
 		if err != nil {
-			m.client.errorMessage("error retrieving game: " + err.Error())
+			m.client.errorMessage(err.Error())
 			return
 		}
-		if game.Host != m.client.sessionid {
-			m.client.errorMessage("you are not the host")
-			return
-		}
-		if err := h.games.ShowResults(session.gamepin); err != nil {
+		if err := h.games.ShowResults(game.Pin); err != nil {
 			m.client.errorMessage("error moving game to show results state: " + err.Error())
 			return
 		}
-		results, err := h.games.GetQuestionResults(session.gamepin)
+		results, err := h.games.GetQuestionResults(game.Pin)
 		if err != nil {
 			m.client.errorMessage("error getting question results: " + err.Error())
 			return
@@ -254,17 +237,63 @@ func (h *Hub) processMessage(m *ClientCommand) {
 		}
 		m.client.sendMessage("question-results " + encoded)
 		m.client.screen("show-question-results")
-		// todo:
-		//
-		// send players updates of whether they were correct and score
-		//
-		// send players to display-player-results screen
-		//
-		// add display-player-results screen to frontend
+		h.informGamePlayersOfResults(game.Pin)
+
+	case "next-question":
+		game, err := h.ensureUserIsGameHost(m)
+		if err != nil {
+			m.client.errorMessage(err.Error())
+			return
+		}
+
+		gameState, err := h.games.NextState(game.Pin)
+		if err != nil {
+			m.client.errorMessage("error setting game to next state: " + err.Error())
+			return
+		}
+		if gameState == QuestionInProgress {
+			m.client.screen("show-question")
+			h.sendGamePlayersToAnswerQuestionScreen(game.Pin)
+			return
+		}
+
+		// assume that game has ended
+		m.client.screen("show-game-results")
+
+		playerids := []string{}
+		for k := range game.Players {
+			playerids = append(playerids, k)
+		}
+		h.sendClientsToScreen(playerids, "enter-identity")
+
+	case "delete-game":
+		game, err := h.ensureUserIsGameHost(m)
+		if err != nil {
+			m.client.errorMessage(err.Error())
+			return
+		}
+		h.games.Delete(game.Pin)
+		m.client.screen("select-quiz")
 
 	default:
 		m.client.errorMessage("invalid command")
 	}
+}
+
+func (h *Hub) ensureUserIsGameHost(m *ClientCommand) (Game, error) {
+	session := h.sessions.GetSession(m.client.sessionid)
+	if session == nil {
+		return Game{}, errors.New("session does not exist")
+	}
+	game, err := h.games.Get(session.gamepin)
+	if err != nil {
+		return Game{}, errors.New("error retrieving game: " + err.Error())
+	}
+	if game.Host != m.client.sessionid {
+		return Game{}, errors.New("you are not the host")
+	}
+
+	return game, nil
 }
 
 func (h *Hub) sendMessageToGameHost(pin int, message string) {
@@ -304,6 +333,53 @@ func (h *Hub) sendGamePlayersToAnswerQuestionScreen(pin int) {
 		client.sendMessage(fmt.Sprintf("display-choices %d", answerCount))
 		h.sessions.UpdateScreenForSession(pid, "answer-question")
 		client.sendMessage("screen answer-question")
+	}
+}
+
+// We are doing all this in the hub for performance reasons - if we did this
+// in the client, we would have to keep fetching the game  for each client.
+//
+// Also sends game players to display-player-results screen.
+//
+func (h *Hub) informGamePlayersOfResults(pin int) {
+	game, err := h.games.Get(pin)
+	if err != nil {
+		log.Printf("error retrieving game %d: %v", pin, err)
+		return
+	}
+
+	playerResults := struct {
+		Correct bool `json:"correct"`
+		Score   int  `json:"score"`
+	}{}
+
+	for pid, score := range game.Players {
+		client := h.sessions.GetClientForSession(pid)
+		if client == nil {
+			continue
+		}
+		_, playerCorrect := game.CorrectPlayers[pid]
+		playerResults.Correct = playerCorrect
+		playerResults.Score = score
+
+		encoded, err := convertToJSON(&playerResults)
+		if err != nil {
+			log.Printf("error converting player-results payload to JSON: %v", err)
+			continue
+		}
+		client.sendMessage("player-results " + encoded)
+		h.sessions.UpdateScreenForSession(pid, "display-player-results")
+		client.sendMessage("screen display-player-results")
+	}
+}
+
+func (h *Hub) sendClientsToScreen(clientids []string, screen string) {
+	for _, id := range clientids {
+		client := h.sessions.GetClientForSession(id)
+		if client == nil {
+			continue
+		}
+		client.screen(screen)
 	}
 }
 

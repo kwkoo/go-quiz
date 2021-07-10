@@ -32,6 +32,9 @@ function processIncoming(app, s) {
                 case 'show-question-results':
                     app.showquestionresultsbuttondisabled = false
                     break
+                case 'show-game-results':
+                    app.showgameresultsbuttondisabled = false
+                    break
             }
             app.screen = arg
             break
@@ -41,8 +44,13 @@ function processIncoming(app, s) {
             app.answerquestion.disabled = false
             break
 
-        case 'display-player-results':
-            // todo: fill in logic here
+        case 'player-results':
+            try {
+                app.displayplayerresults = JSON.parse(arg)
+            } catch (err) {
+                console.log('err: ' + err)
+            }
+            break
 
         case 'all-quizzes':
             try {
@@ -86,6 +94,7 @@ function processIncoming(app, s) {
             } catch (err) {
                 console.log('err: ' + err)
             }
+            break
 
         case 'players-answered':
             try {
@@ -101,6 +110,7 @@ function processIncoming(app, s) {
             } catch (err) {
                 console.log('err: ' + err)
             }
+            break
 
         case 'question-results':
             try {
@@ -108,6 +118,15 @@ function processIncoming(app, s) {
             } catch (err) {
                 console.log('err: ' + err)
             }
+            break
+
+        case 'show-winners':
+            try {
+                app.showgameresults = JSON.parse(arg)
+            } catch (err) {
+                console.log('err: ' + err)
+            }
+            break
 
         default:
             console.log('oops!')
@@ -117,28 +136,32 @@ function processIncoming(app, s) {
 
 var app = new Vue({
     el: '#app',
+
     data: {
         screen: 'start',
-        message: 'Hello Vue!',
         selectquiz: {},
         gamelobby: { pin: 0, players: [] },
         enteridentity: { pin: 0, name: ''},
         answerquestion: { answercount: 0, disabled: true },
+        displayplayerresults: { correct: false, score: 0},
         showquestion: { questionindex: 0, timeleft: 0, answered: 0, totalplayers:0, question: '', answers: [] },
         timer: null,
         timesUp: false,
         showquestionresults: { questionindex: 0, question: '', answers: [], correct: 0, votes: [], totalvotes: 0 },
         showquestionresultsbuttondisabled: true,
+        showgameresults: [],
+        showgameresultsbuttondisabled: true,
         error: { message: '' },
         sessionid: '',
         conn: {}
     },
-    created: function() {
-        console.log('created')
-    },
+
+    //created: function() {
+    //    console.log('created')
+    //},
+
     mounted: function() {
         this.sessionid = readCookie('quizsession')
-        console.log('cookie: ' + this.sessionid)
         if (this.sessionid == null || this.sessionid.length == 0) {
             this.showError('Please enable cookies')
             return
@@ -162,27 +185,31 @@ var app = new Vue({
             this.showError('Your browser does not support WebSockets')
         }
     },
+
     methods: {
-        hello: function() {
-        console.log('hello method')
-        },
+
         showError: function(message, next) {
             this.error.message = message
             this.screen = 'error'
         },
+
         sendAnswer: function(choice) {
             this.answerquestion.disabled = true
             this.sendCommand('answer ' + choice)
         },
+
         sendCommand: function(command) {
             this.conn.send(command)
         },
+
         selectQuiz: function(quizid) {
             this.sendCommand('game-lobby ' + quizid)
         },
+
         joinGame: function() {
             this.sendCommand('join-game ' + JSON.stringify({name: this.enteridentity.name, pin: this.enteridentity.pin}))
         },
+
         stopCountdown: function() {
             if (this.timer != null) {
                 clearInterval(this.timer)
@@ -191,9 +218,15 @@ var app = new Vue({
             this.timesUp = true
             this.sendCommand('show-results')
         },
+
         hostNextQuestion: function() {
             this.showquestionresultsbuttondisabled = true
             this.sendCommand('next-question')
+        },
+
+        deleteGame: function() {
+            this.showgameresultsbuttondisabled = true
+            this.sendCommand('delete-game')
         },
     }
 })
