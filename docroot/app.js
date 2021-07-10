@@ -35,6 +35,7 @@ function processIncoming(app, s) {
             switch (arg) {
                 case 'enter-identity':
                     app.enteridentitydisabled = false
+                    app.setPinFromURL()
                     break
                 case 'answer-question':
                     if (app.answerquestion.disabled) {
@@ -228,6 +229,14 @@ var app = new Vue({
             this.error.message = message
             this.error.next = next
             this.screen = 'error'
+        },
+
+        setPinFromURL: function() {
+            let params=(new URL(document.location)).searchParams
+            let pin=params.get("pin")
+            if (pin != null) {
+                this.enteridentity.pin = pin
+            }
         },
 
         dismissError: function() {
