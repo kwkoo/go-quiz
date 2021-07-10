@@ -6,6 +6,7 @@
   <link rel="stylesheet" href="styles.css">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://unpkg.com/vue"></script>
+  <script src="qrious.js"></script>
 </head>
 <body>
   <div id="app">
@@ -77,7 +78,12 @@
     <div v-show="screen === 'game-lobby'">
       <button class="transparent" v-on:click="cancelGame">Cancel Game</button>
       <br/>
-      <!-- todo: put QR code here -->
+      <div class="center"></canvas></div>
+      <br/>
+      <div class="center"><canvas class="center" id="qr"></canvas></div>
+      <br/>
+      <div class="center"><a v-bind:href="gamelobbylink">{{ gamelobbylink }}</a></div>
+      <br/>
       <h2 class="title">Join this game using the Game Pin:</h2>
       <h1 class="gamepintext">{{ gamelobby.pin }}</h1>
       <textarea class="players" readonly>{{ gamelobbytextarea }}</textarea>

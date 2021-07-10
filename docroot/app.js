@@ -89,6 +89,13 @@ function processIncoming(app, s) {
         case 'lobby-game-metadata':
             try {
                 app.gamelobby = JSON.parse(arg)
+                let url = document.location.protocol + "//" + document.location.host + "?pin=" + app.gamelobby.pin
+                app.gamelobbylink = url
+                let qr = new QRious({
+                    element: document.getElementById('qr'),
+                    size: 300,
+                    value: url
+                })
                 app.updateGameLobbyText()
             } catch (err) {
                 console.log('err: ' + err)
@@ -177,6 +184,7 @@ var app = new Vue({
         selectquiz: {},
         gamelobby: { pin: 0, players: [] },
         gamelobbytextarea: '',
+        gamelobbylink: '',
         gamelobbydisabled: true,
         enteridentity: { pin: 0, name: ''},
         enteridentitydisabled: true,
