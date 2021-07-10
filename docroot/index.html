@@ -1,114 +1,135 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <title>My first Vue app</title>
+<head>  <title>Quiz</title>
+  <link href="https://fonts.googleapis.com/css?family=Raleway" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css?family=Tajawal" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://unpkg.com/vue"></script>
 </head>
 <body>
   <div id="app">
 
     <div v-show="screen === 'start'">
-      Connecting to server...
+      <h2 class="title">Connecting to server...</h2>
     </div>
+
 
     <div v-show="screen === 'enter-identity'">
-        <div class="grid-container">
-          <label class="grid-label">name</label>
-          <input class="grid-value" v-model="enteridentity.name">
-          <label class="grid-label">pin</label>
-          <input class="grid-value" v-model.number="enteridentity.pin" type="number">
-          <div class="final-row">
-            <button :disabled='enteridentitydisabled' v-on:click="joinGame">Join Game</button>
-            <button :disabled='enteridentitydisabled' v-on:click="hostGame">Host Game</button>
-          </div>
-        </div>
+      <h1 class="title">Join a Game</h1>
+      <div>
+        <label class="label">Name</label>
+        <input class="forminput" v-model="enteridentity.name">
+      </div>
+      <br>
+      <div>
+        <label class="label">Game Pin</label>
+        <input class="forminput" v-model.number="enteridentity.pin" type="number">
+      </div>
+      <br>
+      <div>
+        <button class="button" :disabled='enteridentitydisabled' v-on:click="joinGame">Join</button>
+      </div>
+      <div class="center">
+        <button class="transparent" v-on:click="hostGame">Click here to host a game</button>
+      </div>
     </div>
+
 
     <div v-show="screen === 'wait-for-game-start'">
-      Waiting for game to start...
+      <h2 class="title">Waiting for game to start...</h2>
     </div>
+
 
     <div v-show="screen === 'answer-question'">
-      Enter Answer
-      <ul>
-        <li :disabled='answerquestion.disabled' v-if="answerquestion.answercount > 0" v-on:click="sendAnswer(0)"><button>Answer 1</button></li>
-        <li :disabled='answerquestion.disabled' v-if="answerquestion.answercount > 1" v-on:click="sendAnswer(1)"><button>Answer 2</button></li>
-        <li :disabled='answerquestion.disabled' v-if="answerquestion.answercount > 2" v-on:click="sendAnswer(2)"><button>Answer 3</button></li>
-        <li :disabled='answerquestion.disabled' v-if="answerquestion.answercount > 3" v-on:click="sendAnswer(3)"><button>Answer 4</button></li>
-      </ul>
+      <button class="answerbutton" :disabled='answerquestion.disabled' v-for="n in answerquestion.answercount" v-bind:class="{ option0: n==1, option1: n==2, option2: n==3, option3: n==4 }" v-bind:style="{ height: (window.height / 2) + 'px' }" v-on:click="sendAnswer(n-1)"></button>
     </div>
 
+
     <div v-show="screen === 'wait-for-question-end'">
-      Waiting for all players to answer...
+      <h2 class="title">Waiting for all players to answer...</h2>
     </div>
 
     <div v-show="screen === 'display-player-results'">
-      <ul>
-        <li>correct: {{ displayplayerresults.correct }}</li>
-        <li>score: {{ displayplayerresults.score }}</li>
-      </ul>
+      <h4 class="score">Score: {{ displayplayerresults.score }}</h4>
+      <h2 class="playerresult">{{ displayplayerresults.correct?'Correct!':'Incorrect' }}</h2>
     </div>
+
 
     <!-- Host Screens -->
 
     <div v-show="screen === 'select-quiz'">
-        <h1>Select Quiz</h1>
-        <ul>
-            <li v-for="quiz in selectquiz.quizzes">
-                <button :disabled='selectquizdisabled' v-on:click="selectQuiz(quiz.id)">{{ quiz.name }}</button>
-            </li>
-        </ul>
+      <button class="transparent" v-on:click="sendHostBackToStart">Back</button>
+      <h1 class="title">Start a Game</h1>
+      <h4 class="subtitle">Choose a game below or create your own!</h4><!-- todo: put a link to creator here -->
+      <div class="gamelist">
+        <div v-for="quiz in selectquiz.quizzes">
+          <button class="gamebutton" :disabled='selectquizdisabled' v-on:click="selectQuiz(quiz.id)">{{ quiz.name }}</button>
+          <br/><br/>
+        </div>
+      </div>
     </div>
+
 
     <div v-show="screen === 'game-lobby'">
-        <h1>Game Lobby</h1>
-        <h2>{{ gamelobby.name }}</h2>
-        <h2>pin: {{ gamelobby.pin }}</h2>
-        <h2>Players</h2>
-        <ul>
-            <li v-for="player in gamelobby.players">{{ player }}</li>
-        </ul>
-        <button :disabled='gamelobbydisabled' v-on:click="startGame">Start Game</button>
+      <!-- todo: implement cancel game functionality in the backend first -->
+      <button class="transparent">Cancel Game</button>
+      <!-- button class="transparent" v-on:click="sendHostBackToStart">Cancel Game</button -->
+      <br/>
+      <!-- todo: put QR code here -->
+      <h2 class="title">Join this game using the Game Pin:</h2>
+      <h1 class="gamepintext">{{ gamelobby.pin }}</h1>
+      <textarea class="players" readonly>{{ gamelobbytextarea }}</textarea>
+      <br/>
+      <button class="start" :disabled='gamelobbydisabled' v-on:click="startGame">Start Game</button>
     </div>
+
 
     <div v-show="screen === 'show-question'">
-      <ul>
-        <li>Time Left: {{ showquestion.timeleft }}</li>
-        <li>Players Answered: {{ showquestion.answered }} / {{ showquestion.totalplayers }}</li>
-        <li>Question {{ showquestion.questionindex + 1 }}</li>
-        <li>Question: {{ showquestion.question }}</li>
-        <li v-if="showquestion.answers.length > 0">Answer 1: {{ showquestion.answers[0] }}</li>
-        <li v-if="showquestion.answers.length > 1">Answer 2: {{ showquestion.answers[1] }}</li>
-        <li v-if="showquestion.answers.length > 2">Answer 3: {{ showquestion.answers[2] }}</li>
-        <li v-if="showquestion.answers.length > 3">Answer 4: {{ showquestion.answers[3] }}</li>
-      </ul>
+      <h4 class="questionheader">Question {{ showquestion.questionindex + 1 }} / {{ showquestion.totalquestions }}</h4>
+      <h4 class="questionheader">Players Answered: {{ showquestion.answered }} / {{ showquestion.totalplayers }}</h4>
+      <h3 class="questionsubheader">Time Left: {{ showquestion.timeleft }}</h3>
+
+      <div class="blockscontainer">
+        <div v-for="(vote, index) in showquestion.votes" class="square" v-bind:class="{option0: index==0, option1: index==1, option2: index==2, option3: index==3}" v-bind:style="{ height: (vote * 100 / showquestion.totalplayers) + 'px' }"></div>
+      </div>
+
+      <h2 class="questionsubheader">{{ showquestion.question }}</h2>
+      <div v-for="(answer, index) in showquestion.answers">
+        <h3 class="answer" v-bind:class="{option0: index==0, option1: index==1, option2: index==2, option3: index==3}">{{ answer }}</h3>
+        <br/>
+      </div>
     </div>
 
-    <div v-show="screen === 'show-question-results'">
-      Question Results
-      <ul>
-        <li>Question {{ showquestionresults.questionindex + 1 }}</li>
-        <li v-for="v in showquestionresults.votes">{{ v }}</li>
-        <li>Total Votes: {{ showquestionresults.totalvotes }}</li>
-        <li>Question: {{ showquestionresults.question }}</li>
-        <li v-for="(answer, index) in showquestionresults.answers"><span v-if="showquestionresults.correct == index">✓</span>{{ answer }}</li>
-      </ul>
-      <button :disabled="showquestionresultsdisabled" v-on:click="hostNextQuestion">Next Question</button>
+
+    <div v-show="screen === 'show-question-results'" style="background-color: white;">
+      <h4 class="questionheader">Question {{ showquestionresults.questionindex + 1 }} / {{ showquestionresults.totalquestions }}</h4>
+
+      <div class="blockscontainer">
+        <div v-for="(vote, index) in showquestionresults.votes" class="square" v-bind:class="{option0: index==0, option1: index==1, option2: index==2, option3: index==3}" v-bind:style="{ height: (vote * 100 / showquestionresults.totalplayers) + 'px' }"></div>
+      </div>
+
+      <h2 class="questionsubheader">{{ showquestionresults.question }}</h2>
+      <div v-for="(answer, index) in showquestionresults.answers">
+        <h3 v-bind:style="{ filter: (showquestionresults.correct == index ? 'none' : 'grayscale(95%)') }" class="answer" v-bind:class="{option0: index==0, option1: index==1, option2: index==2, option3: index==3}"><span v-if="showquestionresults.correct == index">&#10004 </span>{{ answer }}</h3>
+        <br/>
+      </div>
+      <button class="button" :disabled="showquestionresultsdisabled" v-on:click="hostNextQuestion">Next Question</button>
     </div>
+
 
     <div v-show="screen === 'show-game-results'">
-      Winners Here
-      <ul>
-        <li v-for="(p, index) in showgameresults">{{ index + 1 }}. {{ p.name }} - {{ p.score }}</li>
-      </ul>
-      <button :disabled="showgameresultsdisabled" v-on:click="deleteGame">Delete Game</button>
+      <h2 class="winnertitle">Top Players</h2>
+      <h3 class="winner" v-for="(p, index) in showgameresults">{{ index + 1 }}. {{ p.name }} - {{ p.score }}</h3>
+      <button class="button" :disabled="showgameresultsdisabled" v-on:click="deleteGame">Delete Game</button>
     </div>
 
+
     <div v-show="screen === 'error'">
-      <h2>{{ error.message }}</h2>
-      <button :disabled="error.disabled" v-on:click="dismissError">OK</button>
+      <h2 class="subtitle">{{ error.message }}</h2>
+      <button class="button" :disabled="error.disabled" v-on:click="dismissError">OK</button>
     </div>
+
 
   </div>
   <script src="app.js"></script>

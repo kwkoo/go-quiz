@@ -1,4 +1,3 @@
-
 // copied from https://stackoverflow.com/a/10730417
 function readCookie(name) {
     var nameEQ = name + "=";
@@ -90,6 +89,7 @@ function processIncoming(app, s) {
         case 'lobby-game-metadata':
             try {
                 app.gamelobby = JSON.parse(arg)
+                app.updateGameLobbyText()
             } catch (err) {
                 console.log('err: ' + err)
             }
@@ -98,10 +98,7 @@ function processIncoming(app, s) {
         case 'participants-list':
             try {
                 app.gamelobby.players = JSON.parse(arg)
-
-                if (app.gamelobby && app.gamelobby.players && app.gamelobby.players.length > 0) {
-                    app.gamelobbydisabled = false
-                }
+                app.updateGameLobbyText()
             } catch (err) {
                 console.log('err: ' + err)
             }
@@ -110,6 +107,8 @@ function processIncoming(app, s) {
         case 'show-question':
             try {
                 app.showquestion = JSON.parse(arg)
+
+                //app.calculateBlockHeights()
 
                 if (app.showquestion && app.showquestion.timeleft) {
                     app.timer = setInterval(function() {
@@ -130,9 +129,11 @@ function processIncoming(app, s) {
         case 'players-answered':
             try {
                 payload = JSON.parse(arg)
-                if (payload != null && payload.answered != null && payload.totalplayers != null) {
+                if (payload != null && payload.answered != null && payload.totalplayers != null && payload.votes != null) {
                     app.showquestion.answered = payload.answered
                     app.showquestion.totalplayers = payload.totalplayers
+                    app.showquestion.votes = payload.votes
+                    //app.calculateBlockHeights()
 
                     if (payload.answered >= payload.totalplayers) {
                         app.stopCountdown()
@@ -177,6 +178,7 @@ var app = new Vue({
         screen: 'start',
         selectquiz: {},
         gamelobby: { pin: 0, players: [] },
+        gamelobbytextarea: '',
         gamelobbydisabled: true,
         enteridentity: { pin: 0, name: ''},
         enteridentitydisabled: true,
@@ -184,16 +186,26 @@ var app = new Vue({
         selectquizdisabled: true,
         displayplayerresults: { correct: false, score: 0},
         displayplayerresultsdisabled: true,
-        showquestion: { questionindex: 0, timeleft: 0, answered: 0, totalplayers:0, question: '', answers: [] },
+        showquestion: { questionindex: 0, timeleft: 0, answered: 0, totalplayers:0, question: '', answers: [], votes: [], totalquestions: 0 },
         timer: null,
         timesUp: false,
-        showquestionresults: { questionindex: 0, question: '', answers: [], correct: 0, votes: [], totalvotes: 0 },
+        showquestionresults: { questionindex: 0, question: '', answers: [], correct: 0, votes: [], totalvotes: 0, totalquestions: 0 },
         showquestionresultsdisabled: true,
         showgameresults: [],
         showgameresultsdisabled: true,
         error: { message: '', next: '', disabled: true },
         sessionid: '',
-        conn: {}
+        conn: {},
+        window: { width: 0, height: 0 }
+    },
+
+    created: function() {
+        window.addEventListener('resize', this.handleResize);
+        this.handleResize();
+    },
+
+    destroyed: function() {
+        window.removeEventListener('resize', this.handleResize);
     },
 
     mounted: function() {
@@ -223,6 +235,11 @@ var app = new Vue({
     },
 
     methods: {
+
+        handleResize: function() {
+            this.window.width = window.innerWidth;
+            this.window.height = window.innerHeight;
+        },
 
         showError: function(message, next) {
             this.error.disabled = false
@@ -267,15 +284,51 @@ var app = new Vue({
             this.sendCommand('host-game')
         },
 
+        sendHostBackToStart: function() {
+            this.sendCommand('host-back-to-start')
+        },
+
         selectQuiz: function(quizid) {
             this.selectquizdisabled = true
             this.sendCommand('game-lobby ' + quizid)
+        },
+
+        updateGameLobbyText: function() {
+            if (this.gamelobby && this.gamelobby.players) {
+                let playerstext = ''
+                this.gamelobby.players.forEach((player, index) => {
+                    if (index > 0) playerstext += '\n'
+                    playerstext += player
+                })
+                this.gamelobbytextarea = playerstext
+
+                if (this.gamelobby.players.length > 0) {
+                    this.gamelobbydisabled = false
+                }
+            }
         },
 
         startGame: function() {
             this.gamelobbydisabled = true
             this.sendCommand('start-game')
         },
+
+        /*
+        calculateBlockHeights: function() {
+            console.log(this.showquestion)
+            if (this.showquestion == null || this.showquestion.votes == null || this.showquestion.totalplayers == null) {
+                return
+            }
+            let count = this.showquestion.votes.length
+            console.log('count ' + count)
+            for (var i=0; i<count; i++) {
+                this.showquestionblock[i] = this.showquestion.votes[i] / this.showquestion.totalplayers * 100
+            }
+            for (var i=count; i<4; i++) {
+                this.showquestionblock[i] = 0
+            }
+        },
+        */
 
         stopCountdown: function() {
             if (this.timer != null) {

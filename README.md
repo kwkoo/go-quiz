@@ -9,8 +9,8 @@ A Kahoot clone.
 
 ## To-Do
 
+* cancel game functionality - inform all players in the waiting room
 * ensure user is admin when accessing hosting functions
-* change frontend to look like node version
 * expire sessions if persistence is off
 * persistence
 * quiz creation API
@@ -32,10 +32,10 @@ A Kahoot clone.
 * server → host: screen game-lobby
 * server → host: participants-list ["user1", "user2", "user3"]
 * host → server: start-game
-* server → host: show-question {"questionindex":0, "timeleft":30, "answered":0, "totalplayers":5, "question":"What did I eat for breakfast?", "answers":["answer 0", "answer 1", "answer 2", "answer 3"]}
+* server → host: show-question {"questionindex":0, "timeleft":30, "answered":0, "totalplayers":5, "question":"What did I eat for breakfast?", "answers":["answer 0", "answer 1", "answer 2", "answer 3"], "votes":[0,0,0,0]}
 * server → host: screen show-question
-* server → host: players-answered {"answered": 2, "totalplayers": 10}
-* server → host: players-answered {"answered": 3, "totalplayers": 10}
+* server → host: players-answered {"answered": 2, "totalplayers": 10, "votes":[0,0,0,0]}
+* server → host: players-answered {"answered": 3, "totalplayers": 10, "votes":[0,0,0,0]}
 * *time runs out, stop timer, enable show results button*
 * host → server: show-results
 * host → server: question-results {"questionindex":0, "question":"What did I eat for breakfast?", "answers":["answer 0", "answer 1", "answer 2", "answer 3"], "correct": 0, "votes":[1,2,3,3], "totalvotes": 9}

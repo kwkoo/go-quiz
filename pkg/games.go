@@ -64,21 +64,33 @@ type Game struct {
 // Queried by the host - either when the host first displays the question or
 // when the host reconnects
 type GameCurrentQuestion struct {
-	QuestionIndex int      `json:"questionindex"`
-	TimeLeft      int      `json:"timeleft"`
-	Answered      int      `json:"answered"`     // number of players that have answered
-	TotalPlayers  int      `json:"totalplayers"` // number of players in this game
-	Question      string   `json:"question"`
-	Answers       []string `json:"answers"`
+	QuestionIndex  int      `json:"questionindex"`
+	TimeLeft       int      `json:"timeleft"`
+	Answered       int      `json:"answered"`     // number of players that have answered
+	TotalPlayers   int      `json:"totalplayers"` // number of players in this game
+	Question       string   `json:"question"`
+	Answers        []string `json:"answers"`
+	Votes          []int    `json:"votes"`
+	TotalQuestions int      `json:"totalquestions"`
+}
+
+// To be sent to the host
+type AnswersUpdate struct {
+	AllAnswered  bool  `json:"allanswered"`
+	Answered     int   `json:"answered"`
+	TotalPlayers int   `json:"totalplayers"`
+	Votes        []int `json:"votes"`
 }
 
 type QuestionResults struct {
-	QuestionIndex int      `json:"questionindex"`
-	Question      string   `json:"question"`
-	Answers       []string `json:"answers"`
-	Correct       int      `json:"correct"`
-	Votes         []int    `json:"votes"`
-	TotalVotes    int      `json:"totalvotes"`
+	QuestionIndex  int      `json:"questionindex"`
+	Question       string   `json:"question"`
+	Answers        []string `json:"answers"`
+	Correct        int      `json:"correct"`
+	Votes          []int    `json:"votes"`
+	TotalVotes     int      `json:"totalvotes"`
+	TotalQuestions int      `json:"totalquestions"`
+	TotalPlayers   int      `json:"totalplayers"`
 }
 
 type PlayerScore struct {
@@ -333,12 +345,14 @@ func (g *Games) GetCurrentQuestion(pin int) (GameCurrentQuestion, error) {
 	}
 
 	return GameCurrentQuestion{
-		QuestionIndex: game.QuestionIndex,
-		TimeLeft:      timeLeft,
-		Answered:      len(game.PlayersAnswered),
-		TotalPlayers:  len(game.Players),
-		Question:      question.Question,
-		Answers:       question.Answers,
+		QuestionIndex:  game.QuestionIndex,
+		TimeLeft:       timeLeft,
+		Answered:       len(game.PlayersAnswered),
+		TotalPlayers:   len(game.Players),
+		Question:       question.Question,
+		Answers:        question.Answers,
+		Votes:          game.Votes,
+		TotalQuestions: game.Quiz.NumQuestions(),
 	}, nil
 }
 
@@ -362,33 +376,33 @@ func (g *Games) GetAnsweredCount(pin int) (int, int, error) {
 // * number of players answered
 // * total players in game
 // * error
-func (g *Games) RegisterAnswer(pin int, sessionid string, answerIndex int) (bool, int, int, error) {
+func (g *Games) RegisterAnswer(pin int, sessionid string, answerIndex int) (AnswersUpdate, error) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
 	game, ok := g.all[pin]
 	if !ok {
-		return false, 0, 0, fmt.Errorf("game with pin %d does not exist", pin)
+		return AnswersUpdate{}, fmt.Errorf("game with pin %d does not exist", pin)
 	}
 	if _, ok := game.Players[sessionid]; !ok {
-		return false, 0, 0, fmt.Errorf("player %s is not part of game %d", sessionid, pin)
+		return AnswersUpdate{}, fmt.Errorf("player %s is not part of game %d", sessionid, pin)
 	}
 	if game.GameState != QuestionInProgress {
-		return false, 0, 0, fmt.Errorf("game %d is not showing a live question", pin)
+		return AnswersUpdate{}, fmt.Errorf("game %d is not showing a live question", pin)
 	}
 
 	now := time.Now()
 	if now.After(game.QuestionDeadline) {
 		game.GameState = ShowResults
-		return false, 0, 0, fmt.Errorf("question %d in game %d has expired", game.QuestionIndex, pin)
+		return AnswersUpdate{}, fmt.Errorf("question %d in game %d has expired", game.QuestionIndex, pin)
 	}
 
 	question, err := game.Quiz.GetQuestion(game.QuestionIndex)
 	if err != nil {
-		return false, 0, 0, err
+		return AnswersUpdate{}, err
 	}
 
 	if answerIndex < 0 || answerIndex >= question.NumAnswers() {
-		return false, 0, 0, errors.New("invalid answer")
+		return AnswersUpdate{}, errors.New("invalid answer")
 	}
 
 	if _, ok := game.PlayersAnswered[sessionid]; !ok {
@@ -409,7 +423,12 @@ func (g *Games) RegisterAnswer(pin int, sessionid string, answerIndex int) (bool
 	if allAnswered {
 		game.GameState = ShowResults
 	}
-	return allAnswered, answeredCount, totalPlayers, nil
+	return AnswersUpdate{
+		AllAnswered:  allAnswered,
+		Answered:     answeredCount,
+		TotalPlayers: totalPlayers,
+		Votes:        game.Votes,
+	}, nil
 }
 
 // GetQuestionResults
@@ -425,11 +444,13 @@ func (g *Games) GetQuestionResults(pin int) (QuestionResults, error) {
 		return QuestionResults{}, err
 	}
 	results := QuestionResults{
-		QuestionIndex: game.QuestionIndex,
-		Question:      question.Question,
-		Answers:       question.Answers,
-		Correct:       question.Correct,
-		Votes:         game.Votes,
+		QuestionIndex:  game.QuestionIndex,
+		Question:       question.Question,
+		Answers:        question.Answers,
+		Correct:        question.Correct,
+		Votes:          game.Votes,
+		TotalQuestions: game.Quiz.NumQuestions(),
+		TotalPlayers:   len(game.Players),
 	}
 
 	total := 0

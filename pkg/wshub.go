@@ -206,7 +206,7 @@ func (h *Hub) processMessage(m *ClientCommand) {
 			m.client.errorMessage("could not get game pin for this session")
 			return
 		}
-		_, answeredCount, playerCount, err := h.games.RegisterAnswer(pin, m.client.sessionid, playerAnswer)
+		answersUpdate, err := h.games.RegisterAnswer(pin, m.client.sessionid, playerAnswer)
 		if err != nil {
 			m.client.errorMessage("error registering answer: " + err.Error())
 			return
@@ -215,20 +215,15 @@ func (h *Hub) processMessage(m *ClientCommand) {
 		// send this player to wait for question to end screen
 		m.client.screen("wait-for-question-end")
 
-		// send updated answer count to host
-		hostUpdate := struct {
-			Answered     int `json:"answered"`
-			TotalPlayers int `json:"totalplayers"`
-		}{
-			Answered:     answeredCount,
-			TotalPlayers: playerCount,
-		}
-		encoded, err := convertToJSON(&hostUpdate)
+		encoded, err := convertToJSON(&answersUpdate)
 		if err != nil {
-			log.Printf("error converting players-answerd payload to JSON: %v", err)
+			log.Printf("error converting players-answered payload to JSON: %v", err)
 			return
 		}
 		h.sendMessageToGameHost(pin, "players-answered "+encoded)
+
+	case "host-back-to-start":
+		m.client.screen("enter-identity")
 
 	case "host-game":
 		m.client.screen("select-quiz")
