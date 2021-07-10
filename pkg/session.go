@@ -118,6 +118,17 @@ func (s *Sessions) RegisterSessionInGame(id, name string, pin int) {
 	session.gamepin = pin
 }
 
+func (s *Sessions) DeregisterGameFromSession(id string) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	session, ok := s.all[id]
+
+	if !ok {
+		return
+	}
+	session.gamepin = 0
+}
+
 func (s *Sessions) SetSessionScreen(id, screen string) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()

@@ -60,7 +60,7 @@
 }
 
 .transparent {
-    color: white;
+    /* color: white; */
     text-decoration: none;
     background-color: transparent;
     background-repeat: no-repeat;
@@ -137,7 +137,7 @@
 }
 
 .blockscontainer {
-    height: 120px;
+    height: 150px;
     display: table-cell;
     vertical-align: bottom;
 }

@@ -6,7 +6,6 @@
 package pkg
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -135,13 +134,12 @@ func (h *Hub) processMessage(m *ClientCommand) {
 		// inform game host of new player
 		playerids := h.games.GetPlayersForGame(pinfo.Pin)
 		playernames := h.sessions.ConvertSessionIdsToNames(playerids)
-		var b bytes.Buffer
-		enc := json.NewEncoder(&b)
-		if err := enc.Encode(&playernames); err != nil {
+		encoded, err := convertToJSON(&playernames)
+		if err != nil {
 			log.Printf("error encoding player names: %v", err)
 			return
 		}
-		h.sendMessageToGameHost(pinfo.Pin, "participants-list "+b.String())
+		h.sendMessageToGameHost(pinfo.Pin, "participants-list "+encoded)
 
 	case "query-display-choices":
 		// player may have been disconnected - now they need to know how many
@@ -225,6 +223,18 @@ func (h *Hub) processMessage(m *ClientCommand) {
 	case "host-back-to-start":
 		m.client.screen("enter-identity")
 
+	case "cancel-game":
+		game, err := h.ensureUserIsGameHost(m)
+		if err != nil {
+			m.client.errorMessage(err.Error())
+			return
+		}
+		players := game.getPlayers()
+		players = append(players, game.Host)
+		h.removeGameFromSessions(players)
+		h.sendClientsToScreen(players, "enter-identity")
+		h.games.Delete(game.Pin)
+
 	case "host-game":
 		m.client.screen("select-quiz")
 
@@ -303,11 +313,9 @@ func (h *Hub) processMessage(m *ClientCommand) {
 		// assume that game has ended
 		m.client.screen("show-game-results")
 
-		playerids := []string{}
-		for k := range game.Players {
-			playerids = append(playerids, k)
-		}
-		h.sendClientsToScreen(playerids, "enter-identity")
+		players := game.getPlayers()
+		h.removeGameFromSessions(players)
+		h.sendClientsToScreen(players, "enter-identity")
 
 	case "delete-game":
 		game, err := h.ensureUserIsGameHost(m)
@@ -438,12 +446,18 @@ func (h *Hub) informGamePlayersOfResults(pin int) {
 	}
 }
 
-func (h *Hub) sendClientsToScreen(clientids []string, screen string) {
-	for _, id := range clientids {
+func (h *Hub) sendClientsToScreen(sessionids []string, screen string) {
+	for _, id := range sessionids {
 		client := h.sessions.GetClientForSession(id)
 		if client == nil {
 			continue
 		}
 		client.screen(screen)
+	}
+}
+
+func (h *Hub) removeGameFromSessions(sessionids []string) {
+	for _, id := range sessionids {
+		h.sessions.DeregisterGameFromSession(id)
 	}
 }

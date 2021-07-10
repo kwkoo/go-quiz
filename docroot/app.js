@@ -108,8 +108,6 @@ function processIncoming(app, s) {
             try {
                 app.showquestion = JSON.parse(arg)
 
-                //app.calculateBlockHeights()
-
                 if (app.showquestion && app.showquestion.timeleft) {
                     app.timer = setInterval(function() {
                         if (app.showquestion && app.showquestion.timeleft > 0) {
@@ -133,9 +131,9 @@ function processIncoming(app, s) {
                     app.showquestion.answered = payload.answered
                     app.showquestion.totalplayers = payload.totalplayers
                     app.showquestion.votes = payload.votes
-                    //app.calculateBlockHeights()
+                    app.showquestion.totalvotes = payload.totalvotes
 
-                    if (payload.answered >= payload.totalplayers) {
+                    if (payload.allanswered) {
                         app.stopCountdown()
                     }
                 }
@@ -186,7 +184,7 @@ var app = new Vue({
         selectquizdisabled: true,
         displayplayerresults: { correct: false, score: 0},
         displayplayerresultsdisabled: true,
-        showquestion: { questionindex: 0, timeleft: 0, answered: 0, totalplayers:0, question: '', answers: [], votes: [], totalquestions: 0 },
+        showquestion: { questionindex: 0, timeleft: 0, answered: 0, totalplayers:0, question: '', answers: [], votes: [], totalvotes: 0, totalquestions: 0 },
         timer: null,
         timesUp: false,
         showquestionresults: { questionindex: 0, question: '', answers: [], correct: 0, votes: [], totalvotes: 0, totalquestions: 0 },
@@ -282,6 +280,10 @@ var app = new Vue({
 
         hostGame: function() {
             this.sendCommand('host-game')
+        },
+
+        cancelGame: function() {
+            this.sendCommand('cancel-game')
         },
 
         sendHostBackToStart: function() {

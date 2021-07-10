@@ -48,19 +48,6 @@ func NewUnexpectedStateError(state int, message string) *UnexpectedStateError {
 	}
 }
 
-type Game struct {
-	Pin              int            `json:"pin"`
-	Host             string         `json:"host"`    // session ID of game host
-	Players          map[string]int `json:"players"` // scores of players
-	Quiz             Quiz           `json:"quiz"`
-	QuestionIndex    int            `json:"questionindex"`    // current question
-	QuestionDeadline time.Time      `json:"questiondeadline"` // answers must come in at this time or before
-	PlayersAnswered  map[string]struct{}
-	CorrectPlayers   map[string]struct{} // players that answered current question correctly
-	Votes            []int               `json:"votes"` // number of players that answered each choice
-	GameState        int                 `json:"gamestate"`
-}
-
 // Queried by the host - either when the host first displays the question or
 // when the host reconnects
 type GameCurrentQuestion struct {
@@ -71,15 +58,17 @@ type GameCurrentQuestion struct {
 	Question       string   `json:"question"`
 	Answers        []string `json:"answers"`
 	Votes          []int    `json:"votes"`
+	TotalVotes     int      `json:"totalvotes"`
 	TotalQuestions int      `json:"totalquestions"`
 }
 
-// To be sent to the host
+// To be sent to the host when a player answers a question
 type AnswersUpdate struct {
 	AllAnswered  bool  `json:"allanswered"`
 	Answered     int   `json:"answered"`
 	TotalPlayers int   `json:"totalplayers"`
 	Votes        []int `json:"votes"`
+	TotalVotes   int   `json:"totalvotes"`
 }
 
 type QuestionResults struct {
@@ -103,6 +92,241 @@ type PlayerScoreList []PlayerScore
 func (p PlayerScoreList) Len() int           { return len(p) }
 func (p PlayerScoreList) Less(i, j int) bool { return p[i].Score < p[j].Score }
 func (p PlayerScoreList) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+
+type Game struct {
+	Pin              int            `json:"pin"`
+	Host             string         `json:"host"`    // session ID of game host
+	Players          map[string]int `json:"players"` // scores of players
+	Quiz             Quiz           `json:"quiz"`
+	QuestionIndex    int            `json:"questionindex"`    // current question
+	QuestionDeadline time.Time      `json:"questiondeadline"` // answers must come in at this time or before
+	PlayersAnswered  map[string]struct{}
+	CorrectPlayers   map[string]struct{} // players that answered current question correctly
+	Votes            []int               `json:"votes"` // number of players that answered each choice
+	GameState        int                 `json:"gamestate"`
+}
+
+func (g *Game) setupQuestion(newIndex int) error {
+	g.QuestionIndex = newIndex
+	question, err := g.Quiz.GetQuestion(newIndex)
+	if err != nil {
+		return err
+	}
+	g.GameState = QuestionInProgress
+	g.PlayersAnswered = make(map[string]struct{})
+	g.CorrectPlayers = make(map[string]struct{})
+	g.Votes = make([]int, question.NumAnswers())
+	g.QuestionDeadline = time.Now().Add(time.Second * time.Duration(g.Quiz.QuestionDuration))
+	return nil
+}
+
+func (g *Game) totalVotes() int {
+	total := 0
+	for _, v := range g.Votes {
+		total += v
+	}
+	return total
+}
+
+func (g *Game) getPlayers() []string {
+	players := make([]string, len(g.Players))
+
+	i := 0
+	for player := range g.Players {
+		players[i] = player
+		i++
+	}
+	return players
+}
+
+func (g *Game) addPlayer(sessionid string) {
+	if _, ok := g.Players[sessionid]; ok {
+		// player is already in the game
+		return
+	}
+
+	// player is new in this game
+	g.Players[sessionid] = 0
+	log.Printf("added player %s to game %d", sessionid, g.Pin)
+}
+
+func (g *Game) setQuiz(quiz Quiz) {
+	g.Quiz = quiz
+}
+
+func (g *Game) deletePlayer(sessionid string) {
+	delete(g.Players, sessionid)
+	delete(g.PlayersAnswered, sessionid)
+	delete(g.CorrectPlayers, sessionid)
+}
+
+func (g *Game) nextState() (int, error) {
+	switch g.GameState {
+	case GameNotStarted:
+		// if there are no questions or players, end the game immediately
+		if g.Quiz.NumQuestions() == 0 || len(g.Players) == 0 {
+			g.GameState = GameEnded
+			return g.GameState, nil
+		}
+		if err := g.setupQuestion(0); err != nil {
+			g.GameState = GameEnded
+			return g.GameState, fmt.Errorf("error trying to start game: %v", err)
+		}
+		return g.GameState, nil
+
+	case QuestionInProgress:
+		g.GameState = ShowResults
+		return g.GameState, nil
+
+	case ShowResults:
+		if g.QuestionIndex < g.Quiz.NumQuestions() {
+			g.QuestionIndex++
+		}
+		if g.QuestionIndex >= g.Quiz.NumQuestions() {
+			g.GameState = GameEnded
+			return g.GameState, nil
+		}
+		if err := g.setupQuestion(g.QuestionIndex); err != nil {
+			g.GameState = GameEnded
+			return g.GameState, err
+		}
+		// setupQuestion() would have set the GameState to QuestionInProgress
+		return g.GameState, nil
+
+	default:
+		g.GameState = GameEnded
+		return g.GameState, nil
+	}
+}
+
+func (g *Game) showResults() error {
+	if g.GameState != QuestionInProgress && g.GameState != ShowResults {
+		return NewUnexpectedStateError(g.GameState, fmt.Sprintf("game with pin %d is not in the expected states", g.Pin))
+	}
+	g.GameState = ShowResults
+	return nil
+}
+
+// Returns - questionIndex, number of seconds left, question, error
+func (g *Game) getCurrentQuestion() (GameCurrentQuestion, error) {
+	if g.GameState != QuestionInProgress {
+		return GameCurrentQuestion{}, NewUnexpectedStateError(g.GameState, fmt.Sprintf("game with pin %d is not showing a live question", g.Pin))
+	}
+
+	now := time.Now()
+	timeLeft := int(g.QuestionDeadline.Unix() - now.Unix())
+	if timeLeft <= 0 || len(g.PlayersAnswered) >= len(g.Players) {
+		g.GameState = ShowResults
+		return GameCurrentQuestion{}, fmt.Errorf("game with pin %d should be showing results", g.Pin)
+	}
+
+	question, err := g.Quiz.GetQuestion(g.QuestionIndex)
+	if err != nil {
+		return GameCurrentQuestion{}, err
+	}
+
+	return GameCurrentQuestion{
+		QuestionIndex:  g.QuestionIndex,
+		TimeLeft:       timeLeft,
+		Answered:       len(g.PlayersAnswered),
+		TotalPlayers:   len(g.Players),
+		Question:       question.Question,
+		Answers:        question.Answers,
+		Votes:          g.Votes,
+		TotalVotes:     g.totalVotes(),
+		TotalQuestions: g.Quiz.NumQuestions(),
+	}, nil
+}
+
+func (g *Game) registerAnswer(sessionid string, answerIndex int) (AnswersUpdate, error) {
+	if _, ok := g.Players[sessionid]; !ok {
+		return AnswersUpdate{}, fmt.Errorf("player %s is not part of game %d", sessionid, g.Pin)
+	}
+	if g.GameState != QuestionInProgress {
+		return AnswersUpdate{}, fmt.Errorf("game %d is not showing a live question", g.Pin)
+	}
+
+	now := time.Now()
+	if now.After(g.QuestionDeadline) {
+		g.GameState = ShowResults
+		return AnswersUpdate{}, fmt.Errorf("question %d in game %d has expired", g.QuestionIndex, g.Pin)
+	}
+
+	question, err := g.Quiz.GetQuestion(g.QuestionIndex)
+	if err != nil {
+		return AnswersUpdate{}, err
+	}
+
+	if answerIndex < 0 || answerIndex >= question.NumAnswers() {
+		return AnswersUpdate{}, errors.New("invalid answer")
+	}
+
+	if _, ok := g.PlayersAnswered[sessionid]; !ok {
+		// player hasn't answered yet
+		g.PlayersAnswered[sessionid] = struct{}{}
+
+		if answerIndex == question.Correct {
+			// calculate score, add to player score
+			g.Players[sessionid] += calculateScore(int(g.QuestionDeadline.Unix()-now.Unix()), g.Quiz.QuestionDuration)
+			g.CorrectPlayers[sessionid] = struct{}{}
+		}
+		g.Votes[answerIndex]++
+	}
+
+	answeredCount := len(g.PlayersAnswered)
+	totalPlayers := len(g.Players)
+	allAnswered := answeredCount >= totalPlayers
+	if allAnswered {
+		g.GameState = ShowResults
+	}
+	return AnswersUpdate{
+		AllAnswered:  allAnswered,
+		Answered:     answeredCount,
+		TotalPlayers: totalPlayers,
+		Votes:        g.Votes,
+		TotalVotes:   g.totalVotes(),
+	}, nil
+}
+
+func (g *Game) getQuestionResults() (QuestionResults, error) {
+	question, err := g.Quiz.GetQuestion(g.QuestionIndex)
+	if err != nil {
+		return QuestionResults{}, err
+	}
+	results := QuestionResults{
+		QuestionIndex:  g.QuestionIndex,
+		Question:       question.Question,
+		Answers:        question.Answers,
+		Correct:        question.Correct,
+		Votes:          g.Votes,
+		TotalVotes:     g.totalVotes(),
+		TotalQuestions: g.Quiz.NumQuestions(),
+		TotalPlayers:   len(g.Players),
+	}
+
+	return results, nil
+}
+
+func (g *Game) getWinners() ([]PlayerScore, error) {
+	// copied from https://stackoverflow.com/a/18695740
+	pl := make(PlayerScoreList, len(g.Players))
+	i := 0
+	for k, v := range g.Players {
+		pl[i] = PlayerScore{k, v}
+		i++
+	}
+	sort.Sort(sort.Reverse(pl))
+
+	max := len(pl)
+	if max > winnerCount {
+		max = winnerCount
+	}
+	return pl[:max], nil
+}
+
+func (g *Game) getGameState() int {
+	return g.GameState
+}
 
 type Games struct {
 	mutex sync.RWMutex
@@ -138,7 +362,7 @@ func (g *Games) Add(host string) (int, error) {
 }
 
 func generatePin() int {
-	return 0
+	return 1
 	// todo: commented this out to make testing easier
 	/*
 		b := make([]byte, 4)
@@ -174,15 +398,11 @@ func (g *Games) GetHostForGame(pin int) string {
 func (g *Games) GetPlayersForGame(pin int) []string {
 	g.mutex.RLock()
 	defer g.mutex.RUnlock()
-	p := []string{}
 	game, ok := g.all[pin]
 	if !ok {
-		return p
+		return []string{}
 	}
-	for k := range game.Players {
-		p = append(p, k)
-	}
-	return p
+	return game.getPlayers()
 }
 
 func (g *Games) Update(game Game) error {
@@ -209,15 +429,8 @@ func (g *Games) AddPlayerToGame(sessionid string, pin int) error {
 	if !ok {
 		return fmt.Errorf("game with pin %d does not exist", pin)
 	}
-	if _, ok := game.Players[sessionid]; ok {
-		// player is already in the game
-		return nil
-	}
 
-	// player is new in this game
-	log.Printf("### added player %s", sessionid)
-	game.Players[sessionid] = 0
-
+	game.addPlayer(sessionid)
 	return nil
 }
 
@@ -228,7 +441,7 @@ func (g *Games) SetGameQuiz(pin int, quiz Quiz) {
 	if !ok {
 		return
 	}
-	game.Quiz = quiz
+	game.setQuiz(quiz)
 }
 
 func (g *Games) DeletePlayerFromGame(sessionid string, pin int) {
@@ -238,8 +451,7 @@ func (g *Games) DeletePlayerFromGame(sessionid string, pin int) {
 	if !ok {
 		return
 	}
-	delete(game.Players, sessionid)
-	delete(game.PlayersAnswered, sessionid)
+	game.deletePlayer(sessionid)
 }
 
 // Advances the game state to the next state - returns the new state
@@ -250,42 +462,7 @@ func (g *Games) NextState(pin int) (int, error) {
 	if !ok {
 		return 0, fmt.Errorf("game with pin %d does not exist", pin)
 	}
-	switch game.GameState {
-	case GameNotStarted:
-		// if there are no questions or players, end the game immediately
-		if game.Quiz.NumQuestions() == 0 || len(game.Players) == 0 {
-			game.GameState = GameEnded
-			return game.GameState, nil
-		}
-		if err := game.setupQuestion(0); err != nil {
-			game.GameState = GameEnded
-			return game.GameState, fmt.Errorf("error trying to start game: %v", err)
-		}
-		return game.GameState, nil
-
-	case QuestionInProgress:
-		game.GameState = ShowResults
-		return game.GameState, nil
-
-	case ShowResults:
-		if game.QuestionIndex < game.Quiz.NumQuestions() {
-			game.QuestionIndex++
-		}
-		if game.QuestionIndex >= game.Quiz.NumQuestions() {
-			game.GameState = GameEnded
-			return game.GameState, nil
-		}
-		if err := game.setupQuestion(game.QuestionIndex); err != nil {
-			game.GameState = GameEnded
-			return game.GameState, err
-		}
-		// setupQuestion() would have set the GameState to QuestionInProgress
-		return game.GameState, nil
-
-	default:
-		game.GameState = GameEnded
-		return game.GameState, nil
-	}
+	return game.nextState()
 }
 
 // A special instance of NextState() - if we are in the QuestionInProgress
@@ -298,25 +475,7 @@ func (g *Games) ShowResults(pin int) error {
 	if !ok {
 		return fmt.Errorf("game with pin %d does not exist", pin)
 	}
-	if game.GameState != QuestionInProgress && game.GameState != ShowResults {
-		return NewUnexpectedStateError(game.GameState, fmt.Sprintf("game with pin %d is not in the expected states", pin))
-	}
-	game.GameState = ShowResults
-	return nil
-}
-
-func (g *Game) setupQuestion(newIndex int) error {
-	g.QuestionIndex = newIndex
-	question, err := g.Quiz.GetQuestion(newIndex)
-	if err != nil {
-		return err
-	}
-	g.GameState = QuestionInProgress
-	g.PlayersAnswered = make(map[string]struct{})
-	g.CorrectPlayers = make(map[string]struct{})
-	g.Votes = make([]int, question.NumAnswers())
-	g.QuestionDeadline = time.Now().Add(time.Second * time.Duration(g.Quiz.QuestionDuration))
-	return nil
+	return game.showResults()
 }
 
 // Returns - questionIndex, number of seconds left, question, error
@@ -328,34 +487,10 @@ func (g *Games) GetCurrentQuestion(pin int) (GameCurrentQuestion, error) {
 		return GameCurrentQuestion{}, fmt.Errorf("game with pin %d does not exist", pin)
 	}
 
-	if game.GameState != QuestionInProgress {
-		return GameCurrentQuestion{}, NewUnexpectedStateError(game.GameState, fmt.Sprintf("game with pin %d is not showing a live question", pin))
-	}
-
-	now := time.Now()
-	timeLeft := int(game.QuestionDeadline.Unix() - now.Unix())
-	if timeLeft <= 0 || len(game.PlayersAnswered) >= len(game.Players) {
-		game.GameState = ShowResults
-		return GameCurrentQuestion{}, fmt.Errorf("game with pin %d should be showing results", pin)
-	}
-
-	question, err := game.Quiz.GetQuestion(game.QuestionIndex)
-	if err != nil {
-		return GameCurrentQuestion{}, err
-	}
-
-	return GameCurrentQuestion{
-		QuestionIndex:  game.QuestionIndex,
-		TimeLeft:       timeLeft,
-		Answered:       len(game.PlayersAnswered),
-		TotalPlayers:   len(game.Players),
-		Question:       question.Question,
-		Answers:        question.Answers,
-		Votes:          game.Votes,
-		TotalQuestions: game.Quiz.NumQuestions(),
-	}, nil
+	return game.getCurrentQuestion()
 }
 
+/*
 func (g *Games) GetAnsweredCount(pin int) (int, int, error) {
 	g.mutex.RLock()
 	defer g.mutex.RUnlock()
@@ -370,12 +505,8 @@ func (g *Games) GetAnsweredCount(pin int) (int, int, error) {
 
 	return len(game.PlayersAnswered), len(game.Players), nil
 }
+*/
 
-// Results:
-// * all players answered
-// * number of players answered
-// * total players in game
-// * error
 func (g *Games) RegisterAnswer(pin int, sessionid string, answerIndex int) (AnswersUpdate, error) {
 	g.mutex.Lock()
 	defer g.mutex.Unlock()
@@ -383,55 +514,9 @@ func (g *Games) RegisterAnswer(pin int, sessionid string, answerIndex int) (Answ
 	if !ok {
 		return AnswersUpdate{}, fmt.Errorf("game with pin %d does not exist", pin)
 	}
-	if _, ok := game.Players[sessionid]; !ok {
-		return AnswersUpdate{}, fmt.Errorf("player %s is not part of game %d", sessionid, pin)
-	}
-	if game.GameState != QuestionInProgress {
-		return AnswersUpdate{}, fmt.Errorf("game %d is not showing a live question", pin)
-	}
-
-	now := time.Now()
-	if now.After(game.QuestionDeadline) {
-		game.GameState = ShowResults
-		return AnswersUpdate{}, fmt.Errorf("question %d in game %d has expired", game.QuestionIndex, pin)
-	}
-
-	question, err := game.Quiz.GetQuestion(game.QuestionIndex)
-	if err != nil {
-		return AnswersUpdate{}, err
-	}
-
-	if answerIndex < 0 || answerIndex >= question.NumAnswers() {
-		return AnswersUpdate{}, errors.New("invalid answer")
-	}
-
-	if _, ok := game.PlayersAnswered[sessionid]; !ok {
-		// player hasn't answered yet
-		game.PlayersAnswered[sessionid] = struct{}{}
-
-		if answerIndex == question.Correct {
-			// calculate score, add to player score
-			game.Players[sessionid] += calculateScore(int(game.QuestionDeadline.Unix()-now.Unix()), game.Quiz.QuestionDuration)
-			game.CorrectPlayers[sessionid] = struct{}{}
-		}
-		game.Votes[answerIndex]++
-	}
-
-	answeredCount := len(game.PlayersAnswered)
-	totalPlayers := len(game.Players)
-	allAnswered := answeredCount >= totalPlayers
-	if allAnswered {
-		game.GameState = ShowResults
-	}
-	return AnswersUpdate{
-		AllAnswered:  allAnswered,
-		Answered:     answeredCount,
-		TotalPlayers: totalPlayers,
-		Votes:        game.Votes,
-	}, nil
+	return game.registerAnswer(sessionid, answerIndex)
 }
 
-// GetQuestionResults
 func (g *Games) GetQuestionResults(pin int) (QuestionResults, error) {
 	g.mutex.RLock()
 	defer g.mutex.RUnlock()
@@ -439,27 +524,7 @@ func (g *Games) GetQuestionResults(pin int) (QuestionResults, error) {
 	if !ok {
 		return QuestionResults{}, fmt.Errorf("game with pin %d does not exist", pin)
 	}
-	question, err := game.Quiz.GetQuestion(game.QuestionIndex)
-	if err != nil {
-		return QuestionResults{}, err
-	}
-	results := QuestionResults{
-		QuestionIndex:  game.QuestionIndex,
-		Question:       question.Question,
-		Answers:        question.Answers,
-		Correct:        question.Correct,
-		Votes:          game.Votes,
-		TotalQuestions: game.Quiz.NumQuestions(),
-		TotalPlayers:   len(game.Players),
-	}
-
-	total := 0
-	for _, v := range game.Votes {
-		total += v
-	}
-	results.TotalVotes = total
-
-	return results, nil
+	return game.getQuestionResults()
 }
 
 func (g *Games) GetWinners(pin int) ([]PlayerScore, error) {
@@ -469,21 +534,7 @@ func (g *Games) GetWinners(pin int) ([]PlayerScore, error) {
 	if !ok {
 		return []PlayerScore{}, fmt.Errorf("game with pin %d does not exist", pin)
 	}
-
-	// copied from https://stackoverflow.com/a/18695740
-	pl := make(PlayerScoreList, len(game.Players))
-	i := 0
-	for k, v := range game.Players {
-		pl[i] = PlayerScore{k, v}
-		i++
-	}
-	sort.Sort(sort.Reverse(pl))
-
-	max := len(pl)
-	if max > winnerCount {
-		max = winnerCount
-	}
-	return pl[:max], nil
+	return game.getWinners()
 }
 
 func (g *Games) GetGameState(pin int) (int, error) {
@@ -493,7 +544,7 @@ func (g *Games) GetGameState(pin int) (int, error) {
 	if !ok {
 		return 0, fmt.Errorf("game with pin %d does not exist", pin)
 	}
-	return game.GameState, nil
+	return game.getGameState(), nil
 }
 
 func calculateScore(timeLeft, questionDuration int) int {

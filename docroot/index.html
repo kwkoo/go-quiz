@@ -12,6 +12,7 @@
 
     <div v-show="screen === 'start'">
       <h2 class="title">Connecting to server...</h2>
+      <div class="center"><img src="ajax-loader.gif"></div>
     </div>
 
 
@@ -38,6 +39,7 @@
 
     <div v-show="screen === 'wait-for-game-start'">
       <h2 class="title">Waiting for game to start...</h2>
+      <div class="center"><img src="ajax-loader.gif"></div>
     </div>
 
 
@@ -48,6 +50,7 @@
 
     <div v-show="screen === 'wait-for-question-end'">
       <h2 class="title">Waiting for all players to answer...</h2>
+      <div class="center"><img src="ajax-loader.gif"></div>
     </div>
 
     <div v-show="screen === 'display-player-results'">
@@ -72,9 +75,7 @@
 
 
     <div v-show="screen === 'game-lobby'">
-      <!-- todo: implement cancel game functionality in the backend first -->
-      <button class="transparent">Cancel Game</button>
-      <!-- button class="transparent" v-on:click="sendHostBackToStart">Cancel Game</button -->
+      <button class="transparent" v-on:click="cancelGame">Cancel Game</button>
       <br/>
       <!-- todo: put QR code here -->
       <h2 class="title">Join this game using the Game Pin:</h2>
@@ -91,6 +92,9 @@
       <h3 class="questionsubheader">Time Left: {{ showquestion.timeleft }}</h3>
 
       <div class="blockscontainer">
+        <!--
+          calculate the height based on totalplayers and not totalvotes to get a sense of voting progress
+        -->
         <div v-for="(vote, index) in showquestion.votes" class="square" v-bind:class="{option0: index==0, option1: index==1, option2: index==2, option3: index==3}" v-bind:style="{ height: (vote * 100 / showquestion.totalplayers) + 'px' }"></div>
       </div>
 
@@ -102,10 +106,13 @@
     </div>
 
 
-    <div v-show="screen === 'show-question-results'" style="background-color: white;">
+    <div v-show="screen === 'show-question-results'">
       <h4 class="questionheader">Question {{ showquestionresults.questionindex + 1 }} / {{ showquestionresults.totalquestions }}</h4>
 
       <div class="blockscontainer">
+        <!--
+          calculate the height based on totalplayers and not totalvotes to get a sense of voting progress
+        -->
         <div v-for="(vote, index) in showquestionresults.votes" class="square" v-bind:class="{option0: index==0, option1: index==1, option2: index==2, option3: index==3}" v-bind:style="{ height: (vote * 100 / showquestionresults.totalplayers) + 'px' }"></div>
       </div>
 

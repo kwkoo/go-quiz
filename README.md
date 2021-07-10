@@ -9,7 +9,6 @@ A Kahoot clone.
 
 ## To-Do
 
-* cancel game functionality - inform all players in the waiting room
 * ensure user is admin when accessing hosting functions
 * expire sessions if persistence is off
 * persistence
