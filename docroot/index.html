@@ -23,16 +23,17 @@
         </div>
     </div>
     <div v-show="screen === 'wait-for-game-start'">Waiting for game to start...</div>
-    <div v-show="answer-question'">
+    <div v-show="screen === 'answer-question'">
+      Enter Answer
       <ul>
-        <li v-if="answerquestion > 0"><button>Answer 1</button>></li>
-        <li v-if="answerquestion > 1"><button>Answer 2</button>></li>
-        <li v-if="answerquestion > 2"><button>Answer 3</button>></li>
-        <li v-if="answerquestion > 3"><button>Answer 4</button>></li>
+        <li :disabled='answerquestion.disabled' v-if="answerquestion.answercount > 0" v-on:click="sendAnswer(0)"><button>Answer 1</button></li>
+        <li :disabled='answerquestion.disabled' v-if="answerquestion.answercount > 1" v-on:click="sendAnswer(1)"><button>Answer 2</button></li>
+        <li :disabled='answerquestion.disabled' v-if="answerquestion.answercount > 2" v-on:click="sendAnswer(2)"><button>Answer 3</button></li>
+        <li :disabled='answerquestion.disabled' v-if="answerquestion.answercount > 3" v-on:click="sendAnswer(3)"><button>Answer 4</button></li>
       </ul>
     </div>
     <div v-show="screen === 'wait-for-question-end'">Waiting for all players to answer...</div>
-    <div v-show="display-player-results'">
+    <div v-show="screen === 'display-player-results'">
       <ul>
         <li>correct: true</li>
         <li>score: 0</li>
@@ -60,6 +61,7 @@
     <div v-show="screen === 'show-question'">
       <ul>
         <li>Time Left: {{ showquestion.timeleft }}</li>
+        <li>Players Answered: {{ showquestion.answered }} / {{ showquestion.totalplayers }}</li>
         <li>Question {{ showquestion.questionindex + 1 }}</li>
         <li>Question: {{ showquestion.question }}</li>
         <li v-if="showquestion.answers.length > 0">Answer 1: {{ showquestion.answers[0] }}</li>
@@ -67,10 +69,17 @@
         <li v-if="showquestion.answers.length > 2">Answer 3: {{ showquestion.answers[2] }}</li>
         <li v-if="showquestion.answers.length > 3">Answer 4: {{ showquestion.answers[3] }}</li>
       </ul>
-      <button v-show="timesUp == true" v-on:click="sendCommand('show-results')">Show Answer</button>
     </div>
     <div v-show="screen === 'show-question-results'">
-      Question Results Here
+      Question Results
+      <ul>
+        <li>Question {{ showquestionresults.questionindex + 1 }}</li>
+        <li v-for="v in showquestionresults.votes">{{ v }}</li>
+        <li>Total Votes: {{ showquestionresults.totalvotes }}</li>
+        <li>Question: {{ showquestionresults.question }}</li>
+        <li v-for="(answer, index) in showquestionresults.answers"><span v-if="showquestionresults.correct == index">✓</span>{{ answer }}</li>
+      </ul>
+      <button :disabled="showquestionresultsbuttondisabled" v-on:click="hostNextQuestion">Next Question</button>
     </div>
     <div v-show="screen === 'show-game-results'">
       Winners Here

@@ -198,24 +198,14 @@ func (c *Client) screen(s string) {
 			c.errorMessage("could not get session")
 			return
 		}
-		questionIndex, secondsLeft, quizQuestion, err := c.hub.games.GetCurrentQuestion(session.gamepin)
+
+		currentQuestion, err := c.hub.games.GetCurrentQuestion(session.gamepin)
 		if err != nil {
 			c.errorMessage("error retrieving question: " + err.Error())
 			return
 		}
-		hostQuestion := struct {
-			QuestionIndex int      `json:"questionindex"`
-			TimeLeft      int      `json:"timeleft"`
-			Question      string   `json:"question"`
-			Answers       []string `json:"answers"`
-		}{
-			QuestionIndex: questionIndex,
-			TimeLeft:      secondsLeft,
-			Question:      quizQuestion.Question,
-			Answers:       quizQuestion.Answers,
-		}
 
-		encoded, err := convertToJSON(&hostQuestion)
+		encoded, err := convertToJSON(&currentQuestion)
 		if err != nil {
 			c.errorMessage("error converting question to JSON: " + err.Error())
 			return

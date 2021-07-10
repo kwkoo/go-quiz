@@ -9,11 +9,15 @@ A Kahoot clone.
 
 ## To-Do
 
-* players answer
-* process players answer - move player to wait screen
 * host show question results
 * host move to next question
 * host show game results
+* disable buttons on each screen once an action has been taken
+* enable buttons on screen before showing that screen
+* ensure user is admin when accessing hosting functions
+* ensure that session's client is cleared when client is deregistered
+* do not let a new client take over a session if the session is already tied to a client
+* change frontend to look like node version
 
 
 ## Quiz Host Messages
@@ -30,16 +34,16 @@ A Kahoot clone.
 * server → host: screen game-lobby
 * server → host: participants-list ["user1", "user2", "user3"]
 * host → server: start-game
-* server → host: show-question {"questionindex":0, "timeleft":30, "question":"What did I eat for breakfast?", "answers":["answer 0", "answer 1", "answer 2", "answer 3"]}
+* server → host: show-question {"questionindex":0, "timeleft":30, "answered":0, "totalplayers":5, "question":"What did I eat for breakfast?", "answers":["answer 0", "answer 1", "answer 2", "answer 3"]}
 * server → host: screen show-question
-* server → host: players-answered {"answered": 2, "total": 10}
-* server → host: players-answered {"answered": 3, "total": 10}
+* server → host: players-answered {"answered": 2, "totalplayers": 10}
+* server → host: players-answered {"answered": 3, "totalplayers": 10}
 * *time runs out, stop timer, enable show results button*
 * host → server: show-results
 * host → server: question-results {"questionindex":0, "question":"What did I eat for breakfast?", "answers":["answer 0", "answer 1", "answer 2", "answer 3"], "correct": 0, "votes":[1,2,3,3], "totalvotes": 9}
 * server → host: screen show-question-results
 * host → server: next-question
-* server → host: show-question {"questionindex":1, "timeleft":30, "question":"What did I eat for lunch?", "answers":["answer 0", "answer 1", "answer 2", "answer 3"]}
+* server → host: show-question {"questionindex":1, "timeleft":30, "answered":0, "totalplayers":5, "question":"What did I eat for lunch?", "answers":["answer 0", "answer 1", "answer 2", "answer 3"]}
 * server → host: screen show-question
 * server → host: players-answered {"answered": 10, "total": 10}
 * server → host: stop-timer

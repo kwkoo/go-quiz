@@ -51,6 +51,17 @@ func (s *Sessions) GetScreenForSession(id string) string {
 	return session.screen
 }
 
+func (s *Sessions) GetGamePinForSession(id string) int {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	session, ok := s.all[id]
+	if !ok {
+		return -1
+	}
+
+	return session.gamepin
+}
+
 func (s *Sessions) UpdateScreenForSession(id, newscreen string) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
@@ -95,7 +106,7 @@ func (s *Sessions) GetSession(id string) *Session {
 	return session
 }
 
-func (s *Sessions) SetSessionName(id, name string) {
+func (s *Sessions) RegisterSessionInGame(id, name string, pin int) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	session, ok := s.all[id]
@@ -104,6 +115,7 @@ func (s *Sessions) SetSessionName(id, name string) {
 		return
 	}
 	session.name = name
+	session.gamepin = pin
 }
 
 func (s *Sessions) SetSessionScreen(id, screen string) {

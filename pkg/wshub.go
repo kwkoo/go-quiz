@@ -104,8 +104,77 @@ func (h *Hub) processMessage(m *ClientCommand) {
 	}
 
 	switch m.cmd {
+
+	case "join-game":
+		pinfo := struct {
+			Pin  int    `json:"pin"`
+			Name string `json:"name"`
+		}{}
+		dec := json.NewDecoder(strings.NewReader(m.arg))
+		if err := dec.Decode(&pinfo); err != nil {
+			m.client.errorMessage("could not decode json: " + err.Error())
+			return
+		}
+		if len(pinfo.Name) == 0 {
+			m.client.errorMessage("name is missing")
+			return
+		}
+		if err := h.games.AddPlayerToGame(m.client.sessionid, pinfo.Pin); err != nil {
+			m.client.errorMessage("could not add player to game: " + err.Error())
+			return
+		}
+		h.sessions.RegisterSessionInGame(m.client.sessionid, pinfo.Name, pinfo.Pin)
+		m.client.screen("wait-for-game-start")
+
+		// inform game host of new player
+		playerids := h.games.GetPlayersForGame(pinfo.Pin)
+		playernames := h.sessions.ConvertSessionIdsToNames(playerids)
+		var b bytes.Buffer
+		enc := json.NewEncoder(&b)
+		if err := enc.Encode(&playernames); err != nil {
+			log.Printf("error encoding player names: %v", err)
+			return
+		}
+		h.sendMessageToGameHost(pinfo.Pin, "participants-list "+b.String())
+
+	case "answer":
+		playerAnswer, err := strconv.Atoi(m.arg)
+		if err != nil {
+			m.client.errorMessage("could not parse answer")
+			return
+		}
+		pin := h.sessions.GetGamePinForSession(m.client.sessionid)
+		if pin < 0 {
+			m.client.errorMessage("could not get game pin for this session")
+			return
+		}
+		_, answeredCount, playerCount, err := h.games.RegisterAnswer(pin, m.client.sessionid, playerAnswer)
+		if err != nil {
+			m.client.errorMessage("error registering answer: " + err.Error())
+			return
+		}
+
+		// send this player to wait for question to end screen
+		m.client.screen("wait-for-question-end")
+
+		// send updated answer count to host
+		hostUpdate := struct {
+			Answered     int `json:"answered"`
+			TotalPlayers int `json:"totalplayers"`
+		}{
+			Answered:     answeredCount,
+			TotalPlayers: playerCount,
+		}
+		encoded, err := convertToJSON(&hostUpdate)
+		if err != nil {
+			log.Printf("error converting players-answerd payload to JSON: %v", err)
+			return
+		}
+		h.sendMessageToGameHost(pin, "players-answered "+encoded)
+
 	case "host-game":
 		m.client.screen("select-quiz")
+
 	case "game-lobby":
 		// create new game
 		pin, err := h.games.Add(m.client.sessionid)
@@ -126,38 +195,6 @@ func (h *Hub) processMessage(m *ClientCommand) {
 		}
 		h.games.SetGameQuiz(pin, quiz)
 		m.client.screen("game-lobby")
-
-	case "join-game":
-		pinfo := struct {
-			Pin  int    `json:"pin"`
-			Name string `json:"name"`
-		}{}
-		dec := json.NewDecoder(strings.NewReader(m.arg))
-		if err := dec.Decode(&pinfo); err != nil {
-			m.client.errorMessage("could not decode json: " + err.Error())
-			return
-		}
-		if len(pinfo.Name) == 0 {
-			m.client.errorMessage("name is missing")
-			return
-		}
-		h.sessions.SetSessionName(m.client.sessionid, pinfo.Name)
-		if err := h.games.AddPlayerToGame(m.client.sessionid, pinfo.Pin); err != nil {
-			m.client.errorMessage("could not add player to game: " + err.Error())
-			return
-		}
-		m.client.screen("wait-for-game-start")
-
-		// inform game host of new player
-		playerids := h.games.GetPlayersForGame(pinfo.Pin)
-		playernames := h.sessions.ConvertSessionIdsToNames(playerids)
-		var b bytes.Buffer
-		enc := json.NewEncoder(&b)
-		if err := enc.Encode(&playernames); err != nil {
-			log.Printf("error encoding player names: %v", err)
-			return
-		}
-		h.sendMessageToGameHost(pinfo.Pin, "participants-list "+b.String())
 
 	case "start-game":
 		session := h.sessions.GetSession(m.client.sessionid)
@@ -185,6 +222,45 @@ func (h *Hub) processMessage(m *ClientCommand) {
 		}
 		m.client.screen("show-question")
 		h.sendGamePlayersToAnswerQuestionScreen(session.gamepin)
+
+	case "show-results":
+		session := h.sessions.GetSession(m.client.sessionid)
+		if session == nil {
+			m.client.errorMessage("session does not exist")
+			return
+		}
+		game, err := h.games.Get(session.gamepin)
+		if err != nil {
+			m.client.errorMessage("error retrieving game: " + err.Error())
+			return
+		}
+		if game.Host != m.client.sessionid {
+			m.client.errorMessage("you are not the host")
+			return
+		}
+		if err := h.games.ShowResults(session.gamepin); err != nil {
+			m.client.errorMessage("error moving game to show results state: " + err.Error())
+			return
+		}
+		results, err := h.games.GetQuestionResults(session.gamepin)
+		if err != nil {
+			m.client.errorMessage("error getting question results: " + err.Error())
+			return
+		}
+		encoded, err := convertToJSON(&results)
+		if err != nil {
+			log.Printf("error converting question results payload to JSON: %v", err)
+			return
+		}
+		m.client.sendMessage("question-results " + encoded)
+		m.client.screen("show-question-results")
+		// todo:
+		//
+		// send players updates of whether they were correct and score
+		//
+		// send players to display-player-results screen
+		//
+		// add display-player-results screen to frontend
 
 	default:
 		m.client.errorMessage("invalid command")
@@ -225,7 +301,7 @@ func (h *Hub) sendGamePlayersToAnswerQuestionScreen(pin int) {
 		if client == nil {
 			continue
 		}
-		client.sendMessage(fmt.Sprintf("answer %d", answerCount))
+		client.sendMessage(fmt.Sprintf("display-choices %d", answerCount))
 		h.sessions.UpdateScreenForSession(pid, "answer-question")
 		client.sendMessage("screen answer-question")
 	}

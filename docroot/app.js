@@ -28,11 +28,22 @@ function processIncoming(app, s) {
     console.log('cmd=' + cmd + ',arg=' + arg)
     switch (cmd) {
         case 'screen':
+            switch (arg) {
+                case 'show-question-results':
+                    app.showquestionresultsbuttondisabled = false
+                    break
+            }
             app.screen = arg
             break
+
         case 'display-choices':
-            app.answerquestion = parseInt(arg)
+            app.answerquestion.answercount = parseInt(arg)
+            app.answerquestion.disabled = false
             break
+
+        case 'display-player-results':
+            // todo: fill in logic here
+
         case 'all-quizzes':
             try {
                 app.selectquiz.quizzes = JSON.parse(arg)
@@ -40,6 +51,7 @@ function processIncoming(app, s) {
                 console.log('err: ' + err)
             }
             break
+
         case 'lobby-game-metadata':
             try {
                 app.gamelobby = JSON.parse(arg)
@@ -47,6 +59,7 @@ function processIncoming(app, s) {
                 console.log('err: ' + err)
             }
             break
+
         case 'participants-list':
             try {
                 app.gamelobby.players = JSON.parse(arg)
@@ -54,6 +67,7 @@ function processIncoming(app, s) {
                 console.log('err: ' + err)
             }
             break
+
         case 'show-question':
             try {
                 app.showquestion = JSON.parse(arg)
@@ -72,6 +86,29 @@ function processIncoming(app, s) {
             } catch (err) {
                 console.log('err: ' + err)
             }
+
+        case 'players-answered':
+            try {
+                payload = JSON.parse(arg)
+                if (payload != null && payload.answered != null && payload.totalplayers != null) {
+                    app.showquestion.answered = payload.answered
+                    app.showquestion.totalplayers = payload.totalplayers
+
+                    if (payload.answered >= payload.totalplayers) {
+                        app.stopCountdown()
+                    }
+                }
+            } catch (err) {
+                console.log('err: ' + err)
+            }
+
+        case 'question-results':
+            try {
+                app.showquestionresults = JSON.parse(arg)
+            } catch (err) {
+                console.log('err: ' + err)
+            }
+
         default:
             console.log('oops!')
     }
@@ -86,10 +123,12 @@ var app = new Vue({
         selectquiz: {},
         gamelobby: { pin: 0, players: [] },
         enteridentity: { pin: 0, name: ''},
-        answerquestion: 0,
-        showquestion: { questionindex: 0, timeleft: 0, question: '', answers: [] },
+        answerquestion: { answercount: 0, disabled: true },
+        showquestion: { questionindex: 0, timeleft: 0, answered: 0, totalplayers:0, question: '', answers: [] },
         timer: null,
         timesUp: false,
+        showquestionresults: { questionindex: 0, question: '', answers: [], correct: 0, votes: [], totalvotes: 0 },
+        showquestionresultsbuttondisabled: true,
         error: { message: '' },
         sessionid: '',
         conn: {}
@@ -131,6 +170,10 @@ var app = new Vue({
             this.error.message = message
             this.screen = 'error'
         },
+        sendAnswer: function(choice) {
+            this.answerquestion.disabled = true
+            this.sendCommand('answer ' + choice)
+        },
         sendCommand: function(command) {
             this.conn.send(command)
         },
@@ -145,9 +188,12 @@ var app = new Vue({
                 clearInterval(this.timer)
                 this.timer = null
             }
-            console.log('stop timer ' + this.timesUp)
             this.timesUp = true
-            console.log('after stop timer ' + this.timesUp)
+            this.sendCommand('show-results')
+        },
+        hostNextQuestion: function() {
+            this.showquestionresultsbuttondisabled = true
+            this.sendCommand('next-question')
         },
     }
 })
