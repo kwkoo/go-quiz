@@ -95,6 +95,11 @@ func (h *Hub) processMessage(m *ClientCommand) {
 			if session == nil {
 				session = h.sessions.NewSession(m.client.sessionid, m.client, "enter-identity")
 			} else {
+				if session.client != nil {
+					m.client.sessionid = ""
+					m.client.errorMessage("you have another active session - disconnect that session before reconnecting")
+					return
+				}
 				h.sessions.UpdateClientForSession(m.client.sessionid, m.client)
 			}
 			m.client.screen(session.screen)

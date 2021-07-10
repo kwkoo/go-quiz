@@ -9,18 +9,13 @@ A Kahoot clone.
 
 ## To-Do
 
-* join quiz form validation
-* start game form validation
-* error screen and method
-* enable buttons on screen before showing that screen
 * ensure user is admin when accessing hosting functions
-* ensure that session's client is cleared when client is deregistered
-* do not let a new client take over a session if the session is already tied to a client
 * change frontend to look like node version
 * expire sessions if persistence is off
 * persistence
 * quiz creation API
 * quiz creation frontend
+* admin API to manipulate game state
 
 
 ## Quiz Host Messages
