@@ -28,12 +28,33 @@ function processIncoming(app, s) {
     console.log('cmd=' + cmd + ',arg=' + arg)
     switch (cmd) {
         case 'screen':
+            if (app.screen == 'display-player-results') {
+                // set flag to disabled when we switch away from it
+                app.displayplayerresultsdisabled = true
+            }
             switch (arg) {
                 case 'enter-identity':
                     app.enteridentitydisabled = false
                     break
+                case 'answer-question':
+                    if (app.answerquestion.disabled) {
+                        // we may have been disconnected - request for
+                        // display-choices
+                        app.sendCommand('query-display-choices')
+                    }
+                    break
+                case 'display-player-results':
+                    if (app.displayplayerresultsdisabled) {
+                        // we may have been disconnected - request for results
+                        app.sendCommand('query-player-results')
+                    }
+                    break
                 case 'show-question-results':
-                    app.showquestionresultsdisabled = false
+                    // host may have been disconnected - request for question
+                    // results
+                    if (app.showquestionresultsdisabled) {
+                        app.sendCommand('query-host-question-results')
+                    }
                     break
                 case 'show-game-results':
                     app.showgameresultsdisabled = false
@@ -50,6 +71,7 @@ function processIncoming(app, s) {
         case 'player-results':
             try {
                 app.displayplayerresults = JSON.parse(arg)
+                app.displayplayerresults.disabled = false
             } catch (err) {
                 console.log('err: ' + err)
             }
@@ -123,6 +145,7 @@ function processIncoming(app, s) {
         case 'question-results':
             try {
                 app.showquestionresults = JSON.parse(arg)
+                app.showquestionresultsdisabled = false
             } catch (err) {
                 console.log('err: ' + err)
             }
@@ -134,6 +157,10 @@ function processIncoming(app, s) {
             } catch (err) {
                 console.log('err: ' + err)
             }
+            break
+
+        case 'error':
+            app.showError(arg, app.screen)
             break
 
         default:
@@ -155,6 +182,7 @@ var app = new Vue({
         answerquestion: { answercount: 0, disabled: true },
         selectquizdisabled: true,
         displayplayerresults: { correct: false, score: 0},
+        displayplayerresultsdisabled: true,
         showquestion: { questionindex: 0, timeleft: 0, answered: 0, totalplayers:0, question: '', answers: [] },
         timer: null,
         timesUp: false,
@@ -162,7 +190,7 @@ var app = new Vue({
         showquestionresultsdisabled: true,
         showgameresults: [],
         showgameresultsdisabled: true,
-        error: { message: '' },
+        error: { message: '', next: '', disabled: true },
         sessionid: '',
         conn: {}
     },
@@ -196,11 +224,24 @@ var app = new Vue({
     methods: {
 
         showError: function(message, next) {
+            this.error.disabled = false
             this.error.message = message
+            this.error.next = next
             this.screen = 'error'
         },
 
+        dismissError: function() {
+            this.screen = this.error.next
+            this.error.message = ''
+            this.error.next = ''
+            this.error.disabled = true
+        },
+
         joinGame: function() {
+            if (this.enteridentity.name.length == 0) {
+                this.showError('Please fill in the name field', this.screen)
+                return
+            }
             this.sendCommand('join-game ' + JSON.stringify({name: this.enteridentity.name, pin: this.enteridentity.pin}))
         },
 

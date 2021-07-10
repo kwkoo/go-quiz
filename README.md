@@ -17,6 +17,7 @@ A Kahoot clone.
 * ensure that session's client is cleared when client is deregistered
 * do not let a new client take over a session if the session is already tied to a client
 * change frontend to look like node version
+* expire sessions if persistence is off
 * persistence
 * quiz creation API
 * quiz creation frontend
@@ -60,6 +61,10 @@ A Kahoot clone.
 * server → host: all-quizzes [{"id":1,"name":"Quiz 1"},{"id":2,"name":"Quiz 2"}]
 * server → host: screen select-quiz
 
+Other messages:
+
+* host → server: query-host-question-results - sent when the host reconnects while his state is in the show-question-results screen
+
 
 ## Player Messages
 
@@ -79,3 +84,8 @@ A Kahoot clone.
 * server → player: player-results {"correct": false, "score": 180}
 * *the game ends*
 * server → player: screen enter-identity
+
+Other messages:
+
+* player → server: query-display-choices - sent when the player reconnects while his state is in the answer-question screen
+* player → server: query-player-results - sent when the player reconnects while his state is in the display-player-results screen

@@ -106,7 +106,8 @@
     </div>
 
     <div v-show="screen === 'error'">
-      {{ error.message }}
+      <h2>{{ error.message }}</h2>
+      <button :disabled="error.disabled" v-on:click="dismissError">OK</button>
     </div>
 
   </div>

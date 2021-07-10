@@ -138,6 +138,58 @@ func (h *Hub) processMessage(m *ClientCommand) {
 		}
 		h.sendMessageToGameHost(pinfo.Pin, "participants-list "+b.String())
 
+	case "query-display-choices":
+		// player may have been disconnected - now they need to know how many
+		// answers to enable
+		pin := h.sessions.GetGamePinForSession(m.client.sessionid)
+		if pin < 0 {
+			m.client.errorMessage("could not get game pin for this session")
+			return
+		}
+		currentQuestion, err := h.games.GetCurrentQuestion(pin)
+		if err != nil {
+			m.client.errorMessage("error retrieving current question: " + err.Error())
+			return
+		}
+		m.client.sendMessage(fmt.Sprintf("display-choices %d", len(currentQuestion.Answers)))
+
+	case "query-player-results":
+		// player may have been disconnected - now they need to know about
+		// their results
+		pin := h.sessions.GetGamePinForSession(m.client.sessionid)
+		if pin < 0 {
+			m.client.errorMessage("could not get game pin for this session")
+			return
+		}
+
+		game, err := h.games.Get(pin)
+		if err != nil {
+			m.client.errorMessage("error fetching game: " + err.Error())
+			return
+		}
+
+		_, correct := game.CorrectPlayers[m.client.sessionid]
+		score, ok := game.Players[m.client.sessionid]
+		if !ok {
+			m.client.errorMessage("you do not have a score in this game")
+			return
+		}
+
+		playerResults := struct {
+			Correct bool `json:"correct"`
+			Score   int  `json:"score"`
+		}{
+			Correct: correct,
+			Score:   score,
+		}
+
+		encoded, err := convertToJSON(&playerResults)
+		if err != nil {
+			log.Printf("error converting player-results payload to JSON: %v", err)
+			return
+		}
+		m.client.sendMessage("player-results " + encoded)
+
 	case "answer":
 		playerAnswer, err := strconv.Atoi(m.arg)
 		if err != nil {
@@ -216,28 +268,19 @@ func (h *Hub) processMessage(m *ClientCommand) {
 		h.sendGamePlayersToAnswerQuestionScreen(game.Pin)
 
 	case "show-results":
-		game, err := h.ensureUserIsGameHost(m)
+		pin, err := h.sendQuestionResultsToHost(m)
 		if err != nil {
-			m.client.errorMessage(err.Error())
+			m.client.errorMessage("error sending question results: " + err.Error())
 			return
 		}
-		if err := h.games.ShowResults(game.Pin); err != nil {
-			m.client.errorMessage("error moving game to show results state: " + err.Error())
-			return
-		}
-		results, err := h.games.GetQuestionResults(game.Pin)
-		if err != nil {
-			m.client.errorMessage("error getting question results: " + err.Error())
-			return
-		}
-		encoded, err := convertToJSON(&results)
-		if err != nil {
-			log.Printf("error converting question results payload to JSON: %v", err)
-			return
-		}
-		m.client.sendMessage("question-results " + encoded)
 		m.client.screen("show-question-results")
-		h.informGamePlayersOfResults(game.Pin)
+		h.informGamePlayersOfResults(pin)
+
+	case "query-host-question-results":
+		if _, err := h.sendQuestionResultsToHost(m); err != nil {
+			m.client.errorMessage("error sending question results: " + err.Error())
+			return
+		}
 
 	case "next-question":
 		game, err := h.ensureUserIsGameHost(m)
@@ -294,6 +337,28 @@ func (h *Hub) ensureUserIsGameHost(m *ClientCommand) (Game, error) {
 	}
 
 	return game, nil
+}
+
+// Returns game pin.
+func (h *Hub) sendQuestionResultsToHost(m *ClientCommand) (int, error) {
+	game, err := h.ensureUserIsGameHost(m)
+	if err != nil {
+		return -1, err
+	}
+	if err := h.games.ShowResults(game.Pin); err != nil {
+		return -1, fmt.Errorf("error moving game to show results state: %v", err)
+	}
+	results, err := h.games.GetQuestionResults(game.Pin)
+	if err != nil {
+		return -1, fmt.Errorf("error getting question results: %v", err)
+	}
+	encoded, err := convertToJSON(&results)
+	if err != nil {
+		return -1, fmt.Errorf("error converting question results payload to JSON: %v", err)
+	}
+	m.client.sendMessage("question-results " + encoded)
+
+	return game.Pin, nil
 }
 
 func (h *Hub) sendMessageToGameHost(pin int, message string) {
@@ -382,27 +447,3 @@ func (h *Hub) sendClientsToScreen(clientids []string, screen string) {
 		client.screen(screen)
 	}
 }
-
-/*
-func (h *Hub) sendMessageToGamePlayers(pin int, message string) {
-	playerids := h.games.GetPlayersForGame(pin)
-	for _, pid := range playerids {
-		client := h.sessions.GetClientForSession(pid)
-		if client == nil {
-			continue
-		}
-		client.sendMessage(message)
-	}
-}
-
-func (h *Hub) sendGamePlayersToScreen(pin int, screen string) {
-	playerids := h.games.GetPlayersForGame(pin)
-	for _, pid := range playerids {
-		client := h.sessions.GetClientForSession(pid)
-		if client == nil {
-			continue
-		}
-		client.screen(screen)
-	}
-}
-*/

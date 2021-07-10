@@ -202,6 +202,19 @@ func (c *Client) screen(s string) {
 
 		currentQuestion, err := c.hub.games.GetCurrentQuestion(session.gamepin)
 		if err != nil {
+			// if the host disconnected while the question was live, and if
+			// the game state has now changed, we may need to move the host to
+			// the relevant screen
+			unexpectedState, ok := err.(*UnexpectedStateError)
+			if ok && unexpectedState.CurrentState == ShowResults {
+				c.hub.processMessage(&ClientCommand{
+					client: c,
+					cmd:    "show-results",
+					arg:    "",
+				})
+				return
+			}
+
 			c.errorMessage("error retrieving question: " + err.Error())
 			return
 		}

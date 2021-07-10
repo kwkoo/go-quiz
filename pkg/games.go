@@ -32,6 +32,22 @@ const (
 
 const winnerCount = 5
 
+type UnexpectedStateError struct {
+	CurrentState int
+	Err          error
+}
+
+func (e *UnexpectedStateError) Error() string {
+	return fmt.Sprintf("Game is in an unexpected state: %v", e.Err.Error())
+}
+
+func NewUnexpectedStateError(state int, message string) *UnexpectedStateError {
+	return &UnexpectedStateError{
+		CurrentState: state,
+		Err:          errors.New(message),
+	}
+}
+
 type Game struct {
 	Pin              int            `json:"pin"`
 	Host             string         `json:"host"`    // session ID of game host
@@ -271,7 +287,7 @@ func (g *Games) ShowResults(pin int) error {
 		return fmt.Errorf("game with pin %d does not exist", pin)
 	}
 	if game.GameState != QuestionInProgress && game.GameState != ShowResults {
-		return fmt.Errorf("game with pin %d is not in the expected states", pin)
+		return NewUnexpectedStateError(game.GameState, fmt.Sprintf("game with pin %d is not in the expected states", pin))
 	}
 	game.GameState = ShowResults
 	return nil
@@ -301,7 +317,7 @@ func (g *Games) GetCurrentQuestion(pin int) (GameCurrentQuestion, error) {
 	}
 
 	if game.GameState != QuestionInProgress {
-		return GameCurrentQuestion{}, fmt.Errorf("game with pin %d is not showing a live question", pin)
+		return GameCurrentQuestion{}, NewUnexpectedStateError(game.GameState, fmt.Sprintf("game with pin %d is not showing a live question", pin))
 	}
 
 	now := time.Now()
