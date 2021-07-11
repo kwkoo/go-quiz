@@ -1,3 +1,6 @@
+body {
+    background-color: turquoise;
+}
 
 .title {
     font-family: 'Raleway', sans-serif;
@@ -60,7 +63,7 @@
 }
 
 .transparent {
-    /* color: white; */
+    color: white;
     text-decoration: none;
     background-color: transparent;
     background-repeat: no-repeat;

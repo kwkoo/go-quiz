@@ -274,7 +274,7 @@ var app = new Vue({
                 this.showError('Please fill in the name field', this.screen)
                 return
             }
-            this.sendCommand('join-game ' + JSON.stringify({name: this.enteridentity.name, pin: this.enteridentity.pin}))
+            this.sendCommand('join-game ' + JSON.stringify({name: this.enteridentity.name, pin: parseInt(this.enteridentity.pin)}))
         },
 
         sendAnswer: function(choice) {
@@ -322,23 +322,6 @@ var app = new Vue({
             this.gamelobbydisabled = true
             this.sendCommand('start-game')
         },
-
-        /*
-        calculateBlockHeights: function() {
-            console.log(this.showquestion)
-            if (this.showquestion == null || this.showquestion.votes == null || this.showquestion.totalplayers == null) {
-                return
-            }
-            let count = this.showquestion.votes.length
-            console.log('count ' + count)
-            for (var i=0; i<count; i++) {
-                this.showquestionblock[i] = this.showquestion.votes[i] / this.showquestion.totalplayers * 100
-            }
-            for (var i=count; i<4; i++) {
-                this.showquestionblock[i] = 0
-            }
-        },
-        */
 
         stopCountdown: function() {
             if (this.timer != null) {
