@@ -141,7 +141,7 @@ func (c *Client) screen(s string) {
 		return
 	}
 	switch s {
-	case "select-quiz":
+	case "hostselectquiz":
 		type meta struct {
 			Id   int    `json:"id"`
 			Name string `json:"name"`
@@ -154,15 +154,14 @@ func (c *Client) screen(s string) {
 			})
 		}
 
-		var b bytes.Buffer
-		enc := json.NewEncoder(&b)
-		if err := enc.Encode(&ml); err != nil {
+		encoded, err := convertToJSON(&ml)
+		if err != nil {
 			c.errorMessage(fmt.Sprintf("error encoding json: %v", err))
 			return
 		}
-		c.sendMessage("all-quizzes " + b.String())
+		c.sendMessage("all-quizzes " + encoded)
 
-	case "game-lobby":
+	case "hostgamelobby":
 		// send over game object with lobby-game-metadata
 		game, err := c.hub.games.Get(session.gamepin)
 		if err != nil {
@@ -193,7 +192,7 @@ func (c *Client) screen(s string) {
 		}
 		c.sendMessage("lobby-game-metadata " + encoded)
 
-	case "show-question":
+	case "hostshowquestion":
 		session := c.hub.sessions.GetSession(c.sessionid)
 		if session == nil {
 			c.errorMessage("could not get session")
@@ -224,12 +223,12 @@ func (c *Client) screen(s string) {
 			c.errorMessage("error converting question to JSON: " + err.Error())
 			return
 		}
-		c.sendMessage("show-question " + encoded)
+		c.sendMessage("hostshowquestion " + encoded)
 
-		// The logic for answer-question is in the hub
-		//case "answer-question":
+		// The logic for answerquestion is in the hub
+		//case "answerquestion":
 
-	case "show-game-results":
+	case "hostshowgameresults":
 		session := c.hub.sessions.GetSession(c.sessionid)
 		if session == nil {
 			c.errorMessage("could not get session")

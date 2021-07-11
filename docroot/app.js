@@ -27,37 +27,37 @@ function processIncoming(app, s) {
     console.log('cmd=' + cmd + ',arg=' + arg)
     switch (cmd) {
         case 'screen':
-            if (app.screen == 'display-player-results') {
+            if (app.screen == 'displayplayerresults') {
                 // set flag to disabled when we switch away from it
-                app.displayplayerresultsdisabled = true
+                app.displayplayerresults.disabled = true
             }
             switch (arg) {
-                case 'enter-identity':
-                    app.enteridentitydisabled = false
+                case 'entrance':
+                    app.entrance.disabled = false
                     app.setPinFromURL()
                     break
-                case 'answer-question':
+                case 'answerquestion':
                     if (app.answerquestion.disabled) {
                         // we may have been disconnected - request for
                         // display-choices
                         app.sendCommand('query-display-choices')
                     }
                     break
-                case 'display-player-results':
-                    if (app.displayplayerresultsdisabled) {
+                case 'displayplayerresults':
+                    if (app.displayplayerresults.disabled) {
                         // we may have been disconnected - request for results
                         app.sendCommand('query-player-results')
                     }
                     break
-                case 'show-question-results':
+                case 'hostshowresults':
                     // host may have been disconnected - request for question
                     // results
-                    if (app.showquestionresultsdisabled) {
-                        app.sendCommand('query-host-question-results')
+                    if (app.hostshowresults.disabled) {
+                        app.sendCommand('query-host-results')
                     }
                     break
-                case 'show-game-results':
-                    app.showgameresultsdisabled = false
+                case 'hostshowgameresults':
+                    app.hostshowgameresults.disabled = false
                     break
             }
             app.screen = arg
@@ -70,7 +70,7 @@ function processIncoming(app, s) {
 
         case 'player-results':
             try {
-                app.displayplayerresults = JSON.parse(arg)
+                app.displayplayerresults.data = JSON.parse(arg)
                 app.displayplayerresults.disabled = false
             } catch (err) {
                 console.log('err: ' + err)
@@ -79,8 +79,8 @@ function processIncoming(app, s) {
 
         case 'all-quizzes':
             try {
-                app.selectquiz.quizzes = JSON.parse(arg)
-                app.selectquizdisabled = false
+                app.hostselectquiz.quizzes = JSON.parse(arg)
+                app.hostselectquiz.disabled = false
             } catch (err) {
                 console.log('err: ' + err)
             }
@@ -88,15 +88,15 @@ function processIncoming(app, s) {
 
         case 'lobby-game-metadata':
             try {
-                app.gamelobby = JSON.parse(arg)
-                let url = document.location.protocol + "//" + document.location.host + "?pin=" + app.gamelobby.pin
-                app.gamelobbylink = url
+                app.hostgamelobby.data = JSON.parse(arg)
+                let url = document.location.protocol + "//" + document.location.host + "?pin=" + app.hostgamelobby.data.pin
+                app.hostgamelobby.link = url
                 let qr = new QRious({
                     element: document.getElementById('qr'),
                     size: 300,
                     value: url
                 })
-                app.updateGameLobbyText()
+                app.updateHostGameLobbyText()
             } catch (err) {
                 console.log('err: ' + err)
             }
@@ -104,23 +104,23 @@ function processIncoming(app, s) {
 
         case 'participants-list':
             try {
-                app.gamelobby.players = JSON.parse(arg)
-                app.updateGameLobbyText()
+                app.hostgamelobby.data.players = JSON.parse(arg)
+                app.updateHostGameLobbyText()
             } catch (err) {
                 console.log('err: ' + err)
             }
             break
 
-        case 'show-question':
+        case 'hostshowquestion':
             try {
-                app.showquestion = JSON.parse(arg)
+                app.hostshowquestion.data = JSON.parse(arg)
 
-                if (app.showquestion && app.showquestion.timeleft) {
-                    app.timer = setInterval(function() {
-                        if (app.showquestion && app.showquestion.timeleft > 0) {
-                            app.showquestion.timeleft--
+                if (app.hostshowquestion && app.hostshowquestion.data && app.hostshowquestion.data.timeleft) {
+                    app.hostshowquestion.timer = setInterval(function() {
+                        if (app.hostshowquestion && app.hostshowquestion.data && app.hostshowquestion.data.timeleft > 0) {
+                            app.hostshowquestion.data.timeleft--
 
-                            if (app.showquestion.timeleft == 0) {
+                            if (app.hostshowquestion.data.timeleft == 0) {
                                 app.stopCountdown()
                             }
                         }
@@ -135,10 +135,10 @@ function processIncoming(app, s) {
             try {
                 payload = JSON.parse(arg)
                 if (payload != null && payload.answered != null && payload.totalplayers != null && payload.votes != null) {
-                    app.showquestion.answered = payload.answered
-                    app.showquestion.totalplayers = payload.totalplayers
-                    app.showquestion.votes = payload.votes
-                    app.showquestion.totalvotes = payload.totalvotes
+                    app.hostshowquestion.data.answered = payload.answered
+                    app.hostshowquestion.data.totalplayers = payload.totalplayers
+                    app.hostshowquestion.data.votes = payload.votes
+                    app.hostshowquestion.data.totalvotes = payload.totalvotes
 
                     if (payload.allanswered) {
                         app.stopCountdown()
@@ -151,8 +151,8 @@ function processIncoming(app, s) {
 
         case 'question-results':
             try {
-                app.showquestionresults = JSON.parse(arg)
-                app.showquestionresultsdisabled = false
+                app.hostshowresults.data = JSON.parse(arg)
+                app.hostshowresults.disabled = false
             } catch (err) {
                 console.log('err: ' + err)
             }
@@ -160,7 +160,7 @@ function processIncoming(app, s) {
 
         case 'show-winners':
             try {
-                app.showgameresults = JSON.parse(arg)
+                app.hostshowgameresults.data = JSON.parse(arg)
             } catch (err) {
                 console.log('err: ' + err)
             }
@@ -181,24 +181,15 @@ var app = new Vue({
 
     data: {
         screen: 'start',
-        selectquiz: {},
-        gamelobby: { pin: 0, players: [] },
-        gamelobbytextarea: '',
-        gamelobbylink: '',
-        gamelobbydisabled: true,
-        enteridentity: { pin: 0, name: ''},
-        enteridentitydisabled: true,
+        entrance: { data: {pin: 0, name: ''}, disabled: true },
         answerquestion: { answercount: 0, disabled: true },
-        selectquizdisabled: true,
-        displayplayerresults: { correct: false, score: 0},
-        displayplayerresultsdisabled: true,
-        showquestion: { questionindex: 0, timeleft: 0, answered: 0, totalplayers:0, question: '', answers: [], votes: [], totalvotes: 0, totalquestions: 0 },
-        timer: null,
-        timesUp: false,
-        showquestionresults: { questionindex: 0, question: '', answers: [], correct: 0, votes: [], totalvotes: 0, totalquestions: 0 },
-        showquestionresultsdisabled: true,
-        showgameresults: [],
-        showgameresultsdisabled: true,
+        displayplayerresults: { data: {correct: false, score: 0}, disabled: true },
+
+        hostselectquiz: { quizzes: [], disabled: true },
+        hostgamelobby: { data: { pin: 0, players: [] }, textarea: '', link: '', disabled: true },
+        hostshowquestion: { data: { questionindex: 0, timeleft: 0, answered: 0, totalplayers:0, question: '', answers: [], votes: [], totalvotes: 0, totalquestions: 0 }, timer: null },
+        hostshowresults: { data: { questionindex: 0, question: '', answers: [], correct: 0, votes: [], totalvotes: 0, totalquestions: 0 }, disabled: true },
+        hostshowgameresults: { data: [], disabled: true },
         error: { message: '', next: '', disabled: true },
         sessionid: '',
         conn: {},
@@ -258,7 +249,7 @@ var app = new Vue({
             let params=(new URL(document.location)).searchParams
             let pin=params.get("pin")
             if (pin != null) {
-                this.enteridentity.pin = pin
+                this.entrance.data.pin = pin
             }
         },
 
@@ -270,11 +261,11 @@ var app = new Vue({
         },
 
         joinGame: function() {
-            if (this.enteridentity.name.length == 0) {
+            if (this.entrance.data.name.length == 0) {
                 this.showError('Please fill in the name field', this.screen)
                 return
             }
-            this.sendCommand('join-game ' + JSON.stringify({name: this.enteridentity.name, pin: parseInt(this.enteridentity.pin)}))
+            this.sendCommand('join-game ' + JSON.stringify({name: this.entrance.data.name, pin: parseInt(this.entrance.data.pin)}))
         },
 
         sendAnswer: function(choice) {
@@ -298,47 +289,46 @@ var app = new Vue({
             this.sendCommand('host-back-to-start')
         },
 
-        selectQuiz: function(quizid) {
-            this.selectquizdisabled = true
-            this.sendCommand('game-lobby ' + quizid)
+        hostSelectQuiz: function(quizid) {
+            this.hostselectquiz.disabled = true
+            this.sendCommand('hostgamelobby ' + quizid)
         },
 
-        updateGameLobbyText: function() {
-            if (this.gamelobby && this.gamelobby.players) {
+        updateHostGameLobbyText: function() {
+            if (this.hostgamelobby && this.hostgamelobby.data && this.hostgamelobby.data.players) {
                 let playerstext = ''
-                this.gamelobby.players.forEach((player, index) => {
+                this.hostgamelobby.data.players.forEach((player, index) => {
                     if (index > 0) playerstext += '\n'
                     playerstext += player
                 })
-                this.gamelobbytextarea = playerstext
+                this.hostgamelobby.textarea = playerstext
 
-                if (this.gamelobby.players.length > 0) {
-                    this.gamelobbydisabled = false
+                if (this.hostgamelobby.data.players.length > 0) {
+                    this.hostgamelobby.disabled = false
                 }
             }
         },
 
         startGame: function() {
-            this.gamelobbydisabled = true
+            this.hostgamelobby.disabled = true
             this.sendCommand('start-game')
         },
 
         stopCountdown: function() {
-            if (this.timer != null) {
-                clearInterval(this.timer)
-                this.timer = null
+            if (this.hostshowquestion.timer != null) {
+                clearInterval(this.hostshowquestion.timer)
+                this.hostshowquestion.timer = null
             }
-            this.timesUp = true
             this.sendCommand('show-results')
         },
 
         hostNextQuestion: function() {
-            this.showquestionresultsdisabled = true
+            this.hostshowresults.disabled = true
             this.sendCommand('next-question')
         },
 
         deleteGame: function() {
-            this.showgameresultsdisabled = true
+            this.hostshowgameresults.disabled = true
             this.sendCommand('delete-game')
         },
     }
