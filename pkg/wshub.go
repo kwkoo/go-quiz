@@ -36,8 +36,10 @@ type Hub struct {
 	games *Games
 }
 
-func NewHub() *Hub {
-	quizzes, err := InitQuizzes()
+func NewHub(redisHost, redisPassword string) *Hub {
+	persistenceEngine := InitRedis(redisHost, redisPassword)
+
+	quizzes, err := InitQuizzes(persistenceEngine)
 	if err != nil {
 		log.Fatal(err)
 	}
