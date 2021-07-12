@@ -261,6 +261,7 @@ func (c *Client) screen(s string) {
 			c.errorMessage("error converting show-winners payload to JSON: " + err.Error())
 			return
 		}
+		log.Printf("winners for game %d: %s", session.Gamepin, encoded)
 		c.sendMessage("show-winners " + encoded)
 
 		// end of switch

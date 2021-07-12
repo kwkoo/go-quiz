@@ -42,3 +42,21 @@ func (api *RestApi) Quizzes(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Fprintf(w, "OK")
 }
+
+func (api *RestApi) Sessions(w http.ResponseWriter, r *http.Request) {
+	all := api.hub.sessions.getAll()
+	w.Header().Add("Content-Type", "application/json")
+	enc := json.NewEncoder(w)
+	if err := enc.Encode(all); err != nil {
+		log.Printf("error encoding slice of quizzes to JSON: %v", err)
+	}
+}
+
+func (api *RestApi) Games(w http.ResponseWriter, r *http.Request) {
+	all := api.hub.games.getAll()
+	w.Header().Add("Content-Type", "application/json")
+	enc := json.NewEncoder(w)
+	if err := enc.Encode(all); err != nil {
+		log.Printf("error encoding slice of games to JSON: %v", err)
+	}
+}

@@ -50,6 +50,8 @@ func main() {
 
 	api := pkg.InitRestApi(hub)
 	http.HandleFunc("/api/quizzes", api.Quizzes)
+	http.HandleFunc("/api/sessions", api.Sessions)
+	http.HandleFunc("/api/games", api.Games)
 
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		pkg.ServeWs(hub, w, r)

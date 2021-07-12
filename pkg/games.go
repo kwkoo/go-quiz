@@ -1,10 +1,13 @@
 package pkg
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -94,16 +97,65 @@ func (p PlayerScoreList) Less(i, j int) bool { return p[i].Score < p[j].Score }
 func (p PlayerScoreList) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 type Game struct {
-	Pin              int            `json:"pin"`
-	Host             string         `json:"host"`    // session ID of game host
-	Players          map[string]int `json:"players"` // scores of players
-	Quiz             Quiz           `json:"quiz"`
-	QuestionIndex    int            `json:"questionindex"`    // current question
-	QuestionDeadline time.Time      `json:"questiondeadline"` // answers must come in at this time or before
-	PlayersAnswered  map[string]struct{}
-	CorrectPlayers   map[string]struct{} // players that answered current question correctly
-	Votes            []int               `json:"votes"` // number of players that answered each choice
+	Pin              int                 `json:"pin"`
+	Host             string              `json:"host"`    // session ID of game host
+	Players          map[string]int      `json:"players"` // scores of players
+	Quiz             Quiz                `json:"quiz"`
+	QuestionIndex    int                 `json:"questionindex"`    // current question
+	QuestionDeadline time.Time           `json:"questiondeadline"` // answers must come in at this time or before
+	PlayersAnswered  map[string]struct{} `json:"playersanswered"`
+	CorrectPlayers   map[string]struct{} `json:"correctplayers"` // players that answered current question correctly
+	Votes            []int               `json:"votes"`          // number of players that answered each choice
 	GameState        int                 `json:"gamestate"`
+}
+
+func unmarshalGame(b []byte) (*Game, error) {
+	var game Game
+	dec := json.NewDecoder(bytes.NewReader(b))
+	if err := dec.Decode(&game); err != nil {
+		return nil, err
+	}
+	return &game, nil
+}
+
+func (g *Game) marshal() ([]byte, error) {
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
+	if err := enc.Encode(g); err != nil {
+		return nil, err
+	}
+	return b.Bytes(), nil
+}
+
+func (g *Game) copy() Game {
+	target := Game{
+		Pin:              g.Pin,
+		Host:             g.Host,
+		Players:          make(map[string]int),
+		Quiz:             g.Quiz,
+		QuestionIndex:    g.QuestionIndex,
+		QuestionDeadline: g.QuestionDeadline,
+		PlayersAnswered:  make(map[string]struct{}),
+		CorrectPlayers:   make(map[string]struct{}),
+		Votes:            []int{},
+		GameState:        g.GameState,
+	}
+
+	for k, v := range g.Players {
+		target.Players[k] = v
+	}
+
+	for k := range g.PlayersAnswered {
+		target.PlayersAnswered[k] = struct{}{}
+	}
+
+	for k := range g.CorrectPlayers {
+		target.CorrectPlayers[k] = struct{}{}
+	}
+
+	copy(target.Votes, g.Votes)
+
+	return target
 }
 
 func (g *Game) setupQuestion(newIndex int) error {
@@ -139,15 +191,18 @@ func (g *Game) getPlayers() []string {
 	return players
 }
 
-func (g *Game) addPlayer(sessionid string) {
+// Returns true if the player was added - false if the player is already in
+// the game
+func (g *Game) addPlayer(sessionid string) bool {
 	if _, ok := g.Players[sessionid]; ok {
 		// player is already in the game
-		return
+		return false
 	}
 
 	// player is new in this game
 	g.Players[sessionid] = 0
 	log.Printf("added player %s to game %d", sessionid, g.Pin)
+	return true
 }
 
 func (g *Game) setQuiz(quiz Quiz) {
@@ -207,25 +262,25 @@ func (g *Game) showResults() error {
 	return nil
 }
 
-// Returns - questionIndex, number of seconds left, question, error
-func (g *Game) getCurrentQuestion() (GameCurrentQuestion, error) {
+// Returns true if state was changed
+func (g *Game) getCurrentQuestion() (bool, GameCurrentQuestion, error) {
 	if g.GameState != QuestionInProgress {
-		return GameCurrentQuestion{}, NewUnexpectedStateError(g.GameState, fmt.Sprintf("game with pin %d is not showing a live question", g.Pin))
+		return false, GameCurrentQuestion{}, NewUnexpectedStateError(g.GameState, fmt.Sprintf("game with pin %d is not showing a live question", g.Pin))
 	}
 
 	now := time.Now()
 	timeLeft := int(g.QuestionDeadline.Unix() - now.Unix())
 	if timeLeft <= 0 || len(g.PlayersAnswered) >= len(g.Players) {
 		g.GameState = ShowResults
-		return GameCurrentQuestion{}, fmt.Errorf("game with pin %d should be showing results", g.Pin)
+		return true, GameCurrentQuestion{}, fmt.Errorf("game with pin %d should be showing results", g.Pin)
 	}
 
 	question, err := g.Quiz.GetQuestion(g.QuestionIndex)
 	if err != nil {
-		return GameCurrentQuestion{}, err
+		return false, GameCurrentQuestion{}, err
 	}
 
-	return GameCurrentQuestion{
+	return false, GameCurrentQuestion{
 		QuestionIndex:  g.QuestionIndex,
 		TimeLeft:       timeLeft,
 		Answered:       len(g.PlayersAnswered),
@@ -238,27 +293,28 @@ func (g *Game) getCurrentQuestion() (GameCurrentQuestion, error) {
 	}, nil
 }
 
-func (g *Game) registerAnswer(sessionid string, answerIndex int) (AnswersUpdate, error) {
+// Returns true if changed
+func (g *Game) registerAnswer(sessionid string, answerIndex int) (bool, AnswersUpdate, error) {
 	if _, ok := g.Players[sessionid]; !ok {
-		return AnswersUpdate{}, fmt.Errorf("player %s is not part of game %d", sessionid, g.Pin)
+		return false, AnswersUpdate{}, fmt.Errorf("player %s is not part of game %d", sessionid, g.Pin)
 	}
 	if g.GameState != QuestionInProgress {
-		return AnswersUpdate{}, fmt.Errorf("game %d is not showing a live question", g.Pin)
+		return false, AnswersUpdate{}, fmt.Errorf("game %d is not showing a live question", g.Pin)
 	}
 
 	now := time.Now()
 	if now.After(g.QuestionDeadline) {
 		g.GameState = ShowResults
-		return AnswersUpdate{}, fmt.Errorf("question %d in game %d has expired", g.QuestionIndex, g.Pin)
+		return true, AnswersUpdate{}, fmt.Errorf("question %d in game %d has expired", g.QuestionIndex, g.Pin)
 	}
 
 	question, err := g.Quiz.GetQuestion(g.QuestionIndex)
 	if err != nil {
-		return AnswersUpdate{}, err
+		return false, AnswersUpdate{}, err
 	}
 
 	if answerIndex < 0 || answerIndex >= question.NumAnswers() {
-		return AnswersUpdate{}, errors.New("invalid answer")
+		return false, AnswersUpdate{}, errors.New("invalid answer")
 	}
 
 	if _, ok := g.PlayersAnswered[sessionid]; !ok {
@@ -279,7 +335,7 @@ func (g *Game) registerAnswer(sessionid string, answerIndex int) (AnswersUpdate,
 	if allAnswered {
 		g.GameState = ShowResults
 	}
-	return AnswersUpdate{
+	return true, AnswersUpdate{
 		AllAnswered:  allAnswered,
 		Answered:     answeredCount,
 		TotalPlayers: totalPlayers,
@@ -329,15 +385,80 @@ func (g *Game) getGameState() int {
 }
 
 type Games struct {
-	mutex sync.RWMutex
-	all   map[int]*Game // map key is the game pin
+	mutex  sync.RWMutex
+	all    map[int]*Game // map key is the game pin
+	engine *PersistenceEngine
 }
 
-func InitGames() *Games {
+func InitGames(engine *PersistenceEngine) *Games {
 	games := Games{
-		all: make(map[int]*Game),
+		all:    make(map[int]*Game),
+		engine: engine,
 	}
+
+	if engine == nil {
+		return &games
+	}
+
+	keys, err := engine.GetKeys("game")
+	if err != nil {
+		log.Printf("error retrieving game keys from persistent store: %v", err)
+		return &games
+	}
+
+	for _, key := range keys {
+		data, err := engine.Get(key)
+		if err != nil {
+			log.Printf("error trying to retrieve game %s from persistent store: %v", key, err)
+			continue
+		}
+		game, err := unmarshalGame(data)
+		if err != nil {
+			log.Printf("error trying to unmarshal game %s from persistent store: %v", key, err)
+			continue
+		}
+		games.all[game.Pin] = game
+	}
+
 	return &games
+}
+
+func (g *Games) persist(game *Game) {
+	if g.engine == nil {
+		return
+	}
+	data, err := game.marshal()
+	if err != nil {
+		log.Printf("error trying to convert game %d to JSON: %v", game.Pin, err)
+		return
+	}
+	if err := g.engine.Set(fmt.Sprintf("game:%d", game.Pin), data, 0); err != nil {
+		log.Printf("error trying to persist game %d: %v", game.Pin, err)
+	}
+}
+
+func (g *Games) getAll() []Game {
+	keys, err := g.engine.GetKeys("game")
+	if err != nil {
+		log.Printf("error getting all game keys from persistent store: %v", err)
+		return nil
+	}
+	all := []Game{}
+	for _, key := range keys {
+		key = key[len("game:"):]
+		keyInt, err := strconv.Atoi(key)
+		if err != nil {
+			log.Printf("could not convert game key %s to int: %v", key[len("game:"):], err)
+			continue
+		}
+		game, err := g.Get(keyInt)
+		if err != nil {
+			log.Print(err.Error())
+			continue
+		}
+		all = append(all, game)
+	}
+	return all
 }
 
 func (g *Games) Add(host string) (int, error) {
@@ -355,6 +476,7 @@ func (g *Games) Add(host string) (int, error) {
 		if _, ok := g.all[pin]; !ok {
 			game.Pin = pin
 			g.all[pin] = &game
+			g.persist(&game)
 			return pin, nil
 		}
 	}
@@ -375,119 +497,172 @@ func generatePin() int {
 	*/
 }
 
-func (g *Games) Get(pin int) (Game, error) {
+func (g *Games) getGamePointer(pin int) (*Game, error) {
 	g.mutex.RLock()
-	defer g.mutex.RUnlock()
 	game, ok := g.all[pin]
-	if !ok {
-		return Game{}, fmt.Errorf("could not find game with pin %d", pin)
+	g.mutex.RUnlock()
+
+	if ok {
+		return game, nil
 	}
-	return *game, nil
+
+	if g.engine == nil {
+		return nil, fmt.Errorf("could not find game with pin %d", pin)
+	}
+
+	// game doesn't exist in memory - see if it's in the persistent store
+	data, err := g.engine.Get(fmt.Sprintf("game:%d", pin))
+	if err != nil {
+		return nil, fmt.Errorf("could not find game with pin %d", pin)
+	}
+	game, err = unmarshalGame(data)
+	if err != nil {
+		return nil, fmt.Errorf("could not retrieve game %d from persistent store: %v", pin, err)
+	}
+
+	g.mutex.Lock()
+	g.all[pin] = game
+	g.mutex.Unlock()
+
+	return game, nil
+}
+
+func (g *Games) Get(pin int) (Game, error) {
+	gp, err := g.getGamePointer(pin)
+	if err != nil {
+		return Game{}, err
+	}
+
+	return gp.copy(), nil
 }
 
 func (g *Games) GetHostForGame(pin int) string {
-	g.mutex.RLock()
-	defer g.mutex.RUnlock()
-	game, ok := g.all[pin]
-	if !ok {
+	game, err := g.getGamePointer(pin)
+	if err != nil {
 		return ""
 	}
 	return game.Host
 }
 
 func (g *Games) GetPlayersForGame(pin int) []string {
-	g.mutex.RLock()
-	defer g.mutex.RUnlock()
-	game, ok := g.all[pin]
-	if !ok {
+	game, err := g.Get(pin)
+	if err != nil {
 		return []string{}
 	}
 	return game.getPlayers()
 }
 
 func (g *Games) Update(game Game) error {
+	p := &game
+
 	g.mutex.Lock()
-	defer g.mutex.Unlock()
-	_, ok := g.all[game.Pin]
-	if !ok {
-		return fmt.Errorf("game with pin %d does not exist", game.Pin)
-	}
-	g.all[game.Pin] = &game
+	g.all[game.Pin] = p
+	g.mutex.Unlock()
+
+	g.persist(p)
+
 	return nil
 }
 
 func (g *Games) Delete(pin int) {
 	g.mutex.Lock()
-	defer g.mutex.Unlock()
 	delete(g.all, pin)
+	g.mutex.Unlock()
+
+	if g.engine != nil {
+		g.engine.Delete(fmt.Sprintf("game:%d", pin))
+	}
+
 }
 
 func (g *Games) AddPlayerToGame(sessionid string, pin int) error {
-	g.mutex.Lock()
-	defer g.mutex.Unlock()
-	game, ok := g.all[pin]
-	if !ok {
+	game, err := g.getGamePointer(pin)
+	if err != nil {
 		return fmt.Errorf("game with pin %d does not exist", pin)
 	}
 
-	game.addPlayer(sessionid)
+	g.mutex.Lock()
+	changed := game.addPlayer(sessionid)
+	g.mutex.Unlock()
+	if changed {
+		g.persist(game)
+	}
 	return nil
 }
 
 func (g *Games) SetGameQuiz(pin int, quiz Quiz) {
-	g.mutex.Lock()
-	defer g.mutex.Unlock()
-	game, ok := g.all[pin]
-	if !ok {
+	game, err := g.getGamePointer(pin)
+	if err != nil {
 		return
 	}
+
+	g.mutex.Lock()
 	game.setQuiz(quiz)
+	g.all[pin] = game // this is redundant
+	g.mutex.Unlock()
+
+	g.persist(game)
 }
 
 func (g *Games) DeletePlayerFromGame(sessionid string, pin int) {
-	g.mutex.Lock()
-	defer g.mutex.Unlock()
-	game, ok := g.all[pin]
-	if !ok {
+	game, err := g.getGamePointer(pin)
+	if err != nil {
 		return
 	}
+
+	g.mutex.Lock()
 	game.deletePlayer(sessionid)
+	g.all[pin] = game // this is redundant
+	g.mutex.Unlock()
+
+	g.persist(game)
 }
 
 // Advances the game state to the next state - returns the new state
 func (g *Games) NextState(pin int) (int, error) {
-	g.mutex.Lock()
-	defer g.mutex.Unlock()
-	game, ok := g.all[pin]
-	if !ok {
+	game, err := g.getGamePointer(pin)
+	if err != nil {
 		return 0, fmt.Errorf("game with pin %d does not exist", pin)
 	}
-	return game.nextState()
+
+	g.mutex.Lock()
+	state, err := game.nextState()
+	g.mutex.Unlock()
+	g.persist(game)
+	return state, err
 }
 
 // A special instance of NextState() - if we are in the QuestionInProgress
 // state, change the state to ShowResults.
 // If we are already in ShowResults, do not change the state.
 func (g *Games) ShowResults(pin int) error {
-	g.mutex.Lock()
-	defer g.mutex.Unlock()
-	game, ok := g.all[pin]
-	if !ok {
+	game, err := g.getGamePointer(pin)
+	if err != nil {
 		return fmt.Errorf("game with pin %d does not exist", pin)
 	}
-	return game.showResults()
+
+	g.mutex.Lock()
+	err = game.showResults()
+	g.mutex.Unlock()
+	g.persist(game)
+	return err
 }
 
 // Returns - questionIndex, number of seconds left, question, error
 func (g *Games) GetCurrentQuestion(pin int) (GameCurrentQuestion, error) {
-	g.mutex.Lock()
-	defer g.mutex.Unlock()
-	game, ok := g.all[pin]
-	if !ok {
+	game, err := g.getGamePointer(pin)
+	if err != nil {
 		return GameCurrentQuestion{}, fmt.Errorf("game with pin %d does not exist", pin)
 	}
 
-	return game.getCurrentQuestion()
+	g.mutex.Lock()
+	changed, currentQuestion, err := game.getCurrentQuestion()
+	g.mutex.Unlock()
+	if changed {
+		g.persist(game)
+	}
+
+	return currentQuestion, err
 }
 
 /*
@@ -508,42 +683,44 @@ func (g *Games) GetAnsweredCount(pin int) (int, int, error) {
 */
 
 func (g *Games) RegisterAnswer(pin int, sessionid string, answerIndex int) (AnswersUpdate, error) {
-	g.mutex.Lock()
-	defer g.mutex.Unlock()
-	game, ok := g.all[pin]
-	if !ok {
+	game, err := g.getGamePointer(pin)
+	if err != nil {
 		return AnswersUpdate{}, fmt.Errorf("game with pin %d does not exist", pin)
 	}
-	return game.registerAnswer(sessionid, answerIndex)
+
+	g.mutex.Lock()
+	changed, update, err := game.registerAnswer(sessionid, answerIndex)
+	g.mutex.Unlock()
+	if changed {
+		g.persist(game)
+	}
+	return update, err
 }
 
 func (g *Games) GetQuestionResults(pin int) (QuestionResults, error) {
-	g.mutex.RLock()
-	defer g.mutex.RUnlock()
-	game, ok := g.all[pin]
-	if !ok {
+	game, err := g.getGamePointer(pin)
+	if err != nil {
 		return QuestionResults{}, fmt.Errorf("game with pin %d does not exist", pin)
 	}
+
 	return game.getQuestionResults()
 }
 
 func (g *Games) GetWinners(pin int) ([]PlayerScore, error) {
-	g.mutex.RLock()
-	defer g.mutex.RUnlock()
-	game, ok := g.all[pin]
-	if !ok {
+	game, err := g.getGamePointer(pin)
+	if err != nil {
 		return []PlayerScore{}, fmt.Errorf("game with pin %d does not exist", pin)
 	}
+
 	return game.getWinners()
 }
 
 func (g *Games) GetGameState(pin int) (int, error) {
-	g.mutex.RLock()
-	defer g.mutex.RUnlock()
-	game, ok := g.all[pin]
-	if !ok {
+	game, err := g.getGamePointer(pin)
+	if err != nil {
 		return 0, fmt.Errorf("game with pin %d does not exist", pin)
 	}
+
 	return game.getGameState(), nil
 }
 

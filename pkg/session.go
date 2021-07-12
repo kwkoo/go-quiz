@@ -36,6 +36,16 @@ func (s Session) marshal() ([]byte, error) {
 	return b.Bytes(), nil
 }
 
+func (s *Session) copy() Session {
+	return Session{
+		Id:      s.Id,
+		Client:  s.Client,
+		Screen:  s.Screen,
+		Gamepin: s.Gamepin,
+		Name:    s.Name,
+	}
+}
+
 type Sessions struct {
 	mutex  sync.RWMutex
 	all    map[string]*Session
@@ -92,6 +102,16 @@ func (s *Sessions) persist(session *Session) {
 	if err := s.engine.Set(fmt.Sprintf("session:%s", session.Id), data, sessionExpiry); err != nil {
 		log.Printf("error persisting session %s to redis: %v", session.Id, err)
 	}
+}
+
+func (s *Sessions) getAll() []Session {
+	all := []Session{}
+	s.mutex.RLock()
+	for _, v := range s.all {
+		all = append(all, v.copy())
+	}
+	s.mutex.RUnlock()
+	return all
 }
 
 func (s *Sessions) DeleteSession(id string) {

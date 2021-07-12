@@ -51,7 +51,7 @@ func NewHub(redisHost, redisPassword string) *Hub {
 		clients:          make(map[*Client]bool),
 		sessions:         InitSessions(persistenceEngine),
 		quizzes:          quizzes,
-		games:            InitGames(),
+		games:            InitGames(persistenceEngine),
 	}
 }
 
