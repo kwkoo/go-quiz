@@ -125,7 +125,7 @@ func (q *Quizzes) Add(quiz Quiz) (Quiz, error) {
 		if err := enc.Encode(quiz); err != nil {
 			return Quiz{}, fmt.Errorf("error converting quiz to JSON: %v", err)
 		}
-		if err := q.engine.Set(fmt.Sprintf("quiz:%d", quiz.Id), b.Bytes()); err != nil {
+		if err := q.engine.Set(fmt.Sprintf("quiz:%d", quiz.Id), b.Bytes(), 0); err != nil {
 			return Quiz{}, fmt.Errorf("error persisting quiz to redis: %v", err)
 		}
 	}

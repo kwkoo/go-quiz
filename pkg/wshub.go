@@ -49,7 +49,7 @@ func NewHub(redisHost, redisPassword string) *Hub {
 		register:         make(chan *Client),
 		unregister:       make(chan *Client),
 		clients:          make(map[*Client]bool),
-		sessions:         InitSessions(),
+		sessions:         InitSessions(persistenceEngine),
 		quizzes:          quizzes,
 		games:            InitGames(),
 	}
@@ -87,7 +87,7 @@ func (h *Hub) processMessage(m *ClientCommand) {
 	// client hasn't identified themselves yet
 	if len(m.client.sessionid) == 0 {
 		if m.cmd == "session" {
-			if len(m.arg) == 0 {
+			if len(m.arg) == 0 || len(m.arg) > 64 {
 				m.client.errorMessage("invalid session ID")
 				return
 			}
@@ -96,14 +96,14 @@ func (h *Hub) processMessage(m *ClientCommand) {
 			if session == nil {
 				session = h.sessions.NewSession(m.client.sessionid, m.client, "entrance")
 			} else {
-				if session.client != nil {
+				if session.Client != nil {
 					m.client.sessionid = ""
 					m.client.errorMessage("you have another active session - disconnect that session before reconnecting")
 					return
 				}
 				h.sessions.UpdateClientForSession(m.client.sessionid, m.client)
 			}
-			m.client.screen(session.screen)
+			m.client.screen(session.Screen)
 			return
 		}
 		m.client.errorMessage("client does not have a session")
@@ -338,7 +338,7 @@ func (h *Hub) ensureUserIsGameHost(m *ClientCommand) (Game, error) {
 	if session == nil {
 		return Game{}, errors.New("session does not exist")
 	}
-	game, err := h.games.Get(session.gamepin)
+	game, err := h.games.Get(session.Gamepin)
 	if err != nil {
 		return Game{}, errors.New("error retrieving game: " + err.Error())
 	}

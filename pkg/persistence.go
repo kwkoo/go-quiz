@@ -95,13 +95,25 @@ func (engine *PersistenceEngine) Get(key string) ([]byte, error) {
 	return data, nil
 }
 
-func (engine *PersistenceEngine) Set(key string, value []byte) error {
+func (engine *PersistenceEngine) Set(key string, value []byte, expiry int) error {
 	conn := engine.pool.Get()
 	defer conn.Close()
 
-	_, err := conn.Do("SET", key, value)
+	var err error
+	if expiry == 0 {
+		_, err = conn.Do("SET", key, value)
+	} else {
+		_, err = conn.Do("SET", key, value, "EX", expiry)
+	}
 	if err != nil {
 		return fmt.Errorf("error setting key %s in redis: %v", key, err)
 	}
 	return nil
+}
+
+func (engine *PersistenceEngine) Delete(key string) {
+	conn := engine.pool.Get()
+	defer conn.Close()
+
+	conn.Do("DEL", key)
 }

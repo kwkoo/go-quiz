@@ -15,21 +15,6 @@ import (
 //go:embed docroot/*
 var content embed.FS
 
-/*
-func handler(w http.ResponseWriter, r *http.Request) {
-	path := r.URL.Path
-	log.Print("Request for URI: ", path)
-	if !strings.HasPrefix(path, "/api/") {
-		http.Error(w, "Not Found", http.StatusNotFound)
-		return
-	}
-
-	name := path[len("/api/"):]
-	w.Header().Set("Content-Type", "text/plain")
-	fmt.Fprintln(w, pkg.Message(name))
-}
-*/
-
 func main() {
 	config := struct {
 		Port          int    `default:"8080" usage:"HTTP listener port"`
