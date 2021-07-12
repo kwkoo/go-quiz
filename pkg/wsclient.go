@@ -163,9 +163,9 @@ func (c *Client) screen(s string) {
 
 	case "hostgamelobby":
 		// send over game object with lobby-game-metadata
-		game, err := c.hub.games.Get(session.gamepin)
+		game, err := c.hub.games.Get(session.Gamepin)
 		if err != nil {
-			c.errorMessage(fmt.Sprintf("could not retrieve game %d", session.gamepin))
+			c.errorMessage(fmt.Sprintf("could not retrieve game %d", session.Gamepin))
 			return
 		}
 
@@ -199,7 +199,7 @@ func (c *Client) screen(s string) {
 			return
 		}
 
-		currentQuestion, err := c.hub.games.GetCurrentQuestion(session.gamepin)
+		currentQuestion, err := c.hub.games.GetCurrentQuestion(session.Gamepin)
 		if err != nil {
 			// if the host disconnected while the question was live, and if
 			// the game state has now changed, we may need to move the host to
@@ -235,7 +235,7 @@ func (c *Client) screen(s string) {
 			return
 		}
 
-		winners, err := c.hub.games.GetWinners(session.gamepin)
+		winners, err := c.hub.games.GetWinners(session.Gamepin)
 		if err != nil {
 			c.errorMessage("error retrieving game winners: " + err.Error())
 			return
@@ -252,7 +252,7 @@ func (c *Client) screen(s string) {
 				continue
 			}
 			fl = append(fl, FriendlyScore{
-				Name:  session.name,
+				Name:  session.Name,
 				Score: w.Score,
 			})
 		}
@@ -261,6 +261,7 @@ func (c *Client) screen(s string) {
 			c.errorMessage("error converting show-winners payload to JSON: " + err.Error())
 			return
 		}
+		log.Printf("winners for game %d: %s", session.Gamepin, encoded)
 		c.sendMessage("show-winners " + encoded)
 
 		// end of switch

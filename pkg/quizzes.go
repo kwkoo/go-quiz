@@ -1,11 +1,12 @@
 package pkg
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"sort"
-	"strings"
 	"sync"
 )
 
@@ -38,34 +39,49 @@ func (q Quiz) GetQuestion(i int) (QuizQuestion, error) {
 }
 
 type Quizzes struct {
-	all   map[int]Quiz
-	mutex sync.RWMutex
+	all    map[int]Quiz
+	mutex  sync.RWMutex
+	engine *PersistenceEngine
 }
 
-func InitQuizzes() (*Quizzes, error) {
-	s := `[{"_id":{"$oid":"60d977597c8643fd09ff86ed"},"id":1,"name":"Session 1 - Best Practices","questionDuration":5,"questions":[{"question":"What is the Star Trek ex-borg character name Kubernetes original project name refer to?","answers":["Seven Eleven","Seven of Nine","Seventh Heaven","Seven Deadly Sins"],"correct":1},{"question":"How can I pass my configuration to my container image?","answers":["Fedex","Grab","Secret / ConfigMap","Database"],"correct":2},{"question":"Which pod will be evicted first if the server runs out of resources?","answers":["Pod with \"Guaranteed\" QoS","Pod with \"Burstable\" QoS","Pod with \"BestEffort\" QoS","Pod with \"Important\" QoS"],"correct":2},{"question":"What is the name of the container images whose sole purpose is to build and compile projects?","answers":["Builder Image","Bob The Builder","Handy Manny","Builder VM"],"correct":0},{"question":"What is used to secure communications between microservices?","answers":["SMS / MMS","Grab / FoodPanda","TLS / SSL","Lock / Key"],"correct":2}]},{"_id":{"$oid":"60c9824caf4e0300177308d8"},"id":2,"name":"Session 2 - Quarkus","questionDuration":45,"questions":[{"question":"What is Quarkus' slogan?","answers":["Write once, run anywhere","Build great things at any scale","Supersonic Subatomic Java","There's more than one way to do it"],"correct":2},{"question":"How does Quarkus bring Developer joy?","answers":["Fast compiles","Live reloads","Platform independent","Dynamically typed"],"correct":1},{"question":"Which framework is not in Quarkus?","answers":["Vert.x","RESTEasy","Hibernate","JavaServer Faces"],"correct":3},{"question":"Which is the most popular language used on AWS Lambda?","answers":["Java","Node.js","Python","Rust"],"correct":1},{"question":"Which open-source license is Quarkus published under?","answers":["Apache","BSD","MIT","Creative Commons"],"correct":0}]},{"_id":{"$oid":"60e375d27c725aaf719325b0"},"id":3,"name":"Session 3 - Event Driven","questionDuration":30,"questions":[{"question":"Which component is responsible for hosting topics and delivering messages?","answers":["Kafka Connect","Mirror Maker","Kafka Streams API","Kafka Broker"],"correct":3},{"question":"Which database is not on Debezium's supported list?","answers":["Redis","MongoDB","Microsoft SQL Server","MySQL"],"correct":0},{"question":"Which attribute is not associated with Event Streaming?","answers":["Repeatable ordering","Message replays","Store-and-forward","Partitioning"],"correct":2}]},{"_id":{"$oid":"60e3798f7c725aa10c9325b1"},"id":4,"name":"Session 4 - Keycloak","questionDuration":30,"questions":[{"question":"What is the Red Hat product name for Keycloak?","answers":["Red Hat Keycloak SSO","Red Hat Keycloak Enterprise Edition","Red Hat Single Sign-On","Red Hat Identity Server"],"correct":2},{"question":"Which of the folowing is not a Keycloak feature?","answers":["Identity Brokering","Operating System SSO","Adapters","2-factor authentication"],"correct":1},{"question":"Which of the following is true about Keycloak Storage Federation?","answers":["Keycloak can replicate user databases for failover and DR","Keycloak can federate mulitple external user registries","Keycloak does not provide an API for customer plugins","Keycloak only works with Active Directory"],"correct":1},{"question":"The following are supported authorization mechanisms in Keycloak except:","answers":["Content-based","Role-based","Context-based","Time-based"],"correct":0},{"question":"One of the reasons OpenID Connect is better than OAuth 2.0","answers":["Industry open standard","To address authentication use cases","Designed for authorization flow","It's older"],"correct":1}]}]`
-	dec := json.NewDecoder(strings.NewReader(s))
-
-	var q []Quiz
-	if err := dec.Decode(&q); err != nil {
-		return nil, err
+func InitQuizzes(engine *PersistenceEngine) (*Quizzes, error) {
+	if engine == nil {
+		log.Print("initializing quizzes with no persistence engine")
+		return &Quizzes{all: make(map[int]Quiz)}, nil
 	}
 
-	quizzes := &Quizzes{
-		all: make(map[int]Quiz),
-	}
-	for _, quiz := range q {
-		quizzes.all[quiz.Id] = quiz
+	keys, err := engine.GetKeys("quiz")
+	if err != nil {
+		return nil, fmt.Errorf("could not retrieve keys from redis: %v", err)
 	}
 
-	log.Printf("ingested %d quizzes", len(quizzes.all))
-	return quizzes, nil
+	all := make(map[int]Quiz)
+
+	for _, key := range keys {
+		data, err := engine.Get(key)
+		if err != nil {
+			log.Print(err.Error())
+			continue
+		}
+		dec := json.NewDecoder(bytes.NewReader(data))
+		var quiz Quiz
+		if err := dec.Decode(&quiz); err != nil {
+			log.Printf("error parsing JSON from redis for key %s: %v", key, err)
+			continue
+		}
+		all[quiz.Id] = quiz
+	}
+
+	log.Printf("ingested %d quizzes", len(all))
+	return &Quizzes{
+		all:    all,
+		engine: engine,
+	}, nil
 }
 
 func (q *Quizzes) GetQuizzes() []Quiz {
 	q.mutex.RLock()
 	defer q.mutex.RUnlock()
-	//ids := []int{}
 	ids := make([]int, len(q.all))
 
 	i := 0
@@ -75,7 +91,6 @@ func (q *Quizzes) GetQuizzes() []Quiz {
 	}
 	sort.Ints(ids)
 
-	//r := []Quiz{}
 	r := make([]Quiz, len(ids))
 	for i, id := range ids {
 		r[i] = q.all[id]
@@ -103,6 +118,18 @@ func (q *Quizzes) Add(quiz Quiz) (Quiz, error) {
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
 	quiz.Id = q.nextID()
+
+	if q.engine != nil {
+		var b bytes.Buffer
+		enc := json.NewEncoder(&b)
+		if err := enc.Encode(quiz); err != nil {
+			return Quiz{}, fmt.Errorf("error converting quiz to JSON: %v", err)
+		}
+		if err := q.engine.Set(fmt.Sprintf("quiz:%d", quiz.Id), b.Bytes(), 0); err != nil {
+			return Quiz{}, fmt.Errorf("error persisting quiz to redis: %v", err)
+		}
+	}
+
 	q.all[quiz.Id] = quiz
 	return quiz, nil
 }
@@ -125,4 +152,14 @@ func (q *Quizzes) nextID() int {
 		}
 	}
 	return highest + 1
+}
+
+// Ingests an array of Quiz objects in JSON
+func UnmarshalQuizzes(r io.Reader) ([]Quiz, error) {
+	dec := json.NewDecoder(r)
+	var quizzes []Quiz
+	if err := dec.Decode(&quizzes); err != nil {
+		return nil, err
+	}
+	return quizzes, nil
 }

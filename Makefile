@@ -6,7 +6,7 @@ COVERAGEHTML=coverage.html
 IMAGENAME="kwkoo/$(PACKAGE)"
 VERSION="0.1"
 
-.PHONY: run build clean test coverage image runcontainer
+.PHONY: run build clean test coverage image runcontainer redis importquizzes
 run:
 	@go run main.go -docroot $(BASE)/docroot
 
@@ -40,3 +40,14 @@ runcontainer:
 	  -p 8080:8080 \
 	  -e TZ=Asia/Singapore \
 	  $(IMAGENAME):$(VERSION)
+
+redis:
+	docker run \
+	  --rm \
+	  -it \
+	  --name redis \
+	  -p 6379:6379 \
+	  redis:5
+
+importquizzes:
+	@curl -XPUT -d @$(BASE)/quizzes.json http://localhost:8080/api/quizzes

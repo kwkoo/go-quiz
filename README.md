@@ -5,6 +5,8 @@ A Kahoot clone.
 ## Resources
 
 * [gorilla websocket example](https://github.com/gorilla/websocket/tree/master/examples/chat)
+* [redigo docs](https://pkg.go.dev/github.com/gomodule/redigo/redis)
+* [redigo example code](https://github.com/pete911/examples-redigo)
 
 
 ## To-Do
