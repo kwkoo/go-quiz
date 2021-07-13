@@ -3,6 +3,7 @@ package pkg
 import (
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/gomodule/redigo/redis"
@@ -47,9 +48,14 @@ func InitRedis(redisHost, redisPassword string) *PersistenceEngine {
 	return &PersistenceEngine{pool: &pool}
 }
 
-func (engine *PersistenceEngine) Shutdown() {
-	engine.pool.Close()
-	log.Print("successfully shutdown redis connection pool")
+func (engine *PersistenceEngine) RegisterShutdownHandler(shutdownChan chan struct{}, wg *sync.WaitGroup) {
+	wg.Add(1)
+	go func() {
+		<-shutdownChan
+		engine.pool.Close()
+		log.Print("persistence engine graceful shutdown")
+		wg.Done()
+	}()
 }
 
 func (engine *PersistenceEngine) GetKeys(prefix string) ([]string, error) {

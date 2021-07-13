@@ -4,30 +4,34 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 )
 
-var shutdownListeners []func()
+var (
+	signalChan   chan os.Signal
+	shutdownChan chan struct{} // this channel will be closed when the relevant signals are received
+	shutdownWG   sync.WaitGroup
+)
 
 func InitShutdownHandler() {
-	shutdownListeners = []func(){}
+	shutdownChan = make(chan struct{})
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	signal.Notify(c, syscall.SIGTERM)
-	go func() {
-		<-c
-		log.Print("received signal - shutting down gracefully...")
-
-		// we received a signal - proceed to call all registered listeners
-		for _, f := range shutdownListeners {
-			f()
-		}
-
-		os.Exit(0)
-	}()
+	signalChan = make(chan os.Signal, 1)
+	signal.Notify(signalChan, os.Interrupt)
+	signal.Notify(signalChan, syscall.SIGTERM)
 }
 
-func RegisterShutdownHandler(f func()) {
-	shutdownListeners = append(shutdownListeners, f)
+func WaitForShutdown() {
+	<-signalChan
+	log.Print("received signal - shutting down gracefully...")
+
+	// we received a signal - proceed to call all registered listeners
+	close(shutdownChan)
+	shutdownWG.Wait()
+	log.Print("All shutdown listeners are done")
+}
+
+func GetShutdownArtifacts() (chan struct{}, *sync.WaitGroup) {
+	return shutdownChan, &shutdownWG
 }

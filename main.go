@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
+	"time"
 	_ "time/tzdata"
 
 	"github.com/kwkoo/configparser"
@@ -67,6 +69,31 @@ func main() {
 		pkg.ServeWs(hub, w, r)
 	})
 
-	log.Printf("listening on port %v", config.Port)
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", config.Port), nil))
+	server := &http.Server{
+		Addr: fmt.Sprintf(":%d", config.Port),
+	}
+
+	shutdownChan, shutdownWG := pkg.GetShutdownArtifacts()
+	shutdownWG.Add(1)
+	go func() {
+		log.Printf("listening on port %v", config.Port)
+		if err := server.ListenAndServe(); err != nil {
+			if err == http.ErrServerClosed {
+				log.Print("web server graceful shutdown")
+				shutdownWG.Done()
+				return
+			}
+			log.Fatal(err)
+		}
+	}()
+
+	go func() {
+		<-shutdownChan
+		log.Print("interrupt signal received, initiaing web server shutdown...")
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		server.Shutdown(ctx)
+	}()
+
+	pkg.WaitForShutdown()
 }
