@@ -5,10 +5,11 @@ COVERAGEOUTPUT=coverage.out
 COVERAGEHTML=coverage.html
 IMAGENAME="kwkoo/$(PACKAGE)"
 VERSION="0.1"
+ADMINPASSWORD="password"
 
 .PHONY: run build clean test coverage image runcontainer redis importquizzes
 run:
-	@go run main.go -docroot $(BASE)/docroot
+	@ADMINPASSWORD="$(ADMINPASSWORD)" go run main.go -docroot $(BASE)/docroot
 
 build:
 	@echo "Building..."

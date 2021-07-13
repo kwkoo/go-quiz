@@ -12,6 +12,8 @@ import (
 	"github.com/kwkoo/go-quiz/pkg"
 )
 
+const authRealm = "Quiz Admin"
+
 //go:embed docroot/*
 var content embed.FS
 
@@ -21,12 +23,12 @@ func main() {
 		Docroot       string `usage:"HTML document root - will use the embedded docroot if not specified"`
 		RedisHost     string `default:"localhost:6379" usage:"Redis host and port"`
 		RedisPassword string `usage:"Redis password"`
+		AdminUser     string `default:"admin" usage:"Admin username"`
+		AdminPassword string `usage:"Admin password"`
 	}{}
 	if err := configparser.Parse(&config); err != nil {
 		log.Fatal(err)
 	}
-
-	//http.HandleFunc("/api/", handler)
 
 	var filesystem http.FileSystem
 	if len(config.Docroot) > 0 {
@@ -42,16 +44,22 @@ func main() {
 		filesystem = http.FS(subdir)
 	}
 
-	cookieGen := pkg.InitCookieGenerator(http.FileServer(filesystem).ServeHTTP)
+	auth := pkg.InitAuth(config.AdminUser, config.AdminPassword, authRealm)
+
+	fileServer := http.FileServer(filesystem).ServeHTTP
+
+	http.HandleFunc("/admin/", auth.BasicAuth(fileServer))
+
+	cookieGen := pkg.InitCookieGenerator(fileServer)
 	http.HandleFunc("/", cookieGen.ServeHTTP)
 
 	hub := pkg.NewHub(config.RedisHost, config.RedisPassword)
 	go hub.Run()
 
 	api := pkg.InitRestApi(hub)
-	http.HandleFunc("/api/quizzes", api.Quizzes)
-	http.HandleFunc("/api/sessions", api.Sessions)
-	http.HandleFunc("/api/games", api.Games)
+	http.HandleFunc("/api/quizzes", auth.BasicAuth(api.Quizzes))
+	http.HandleFunc("/api/sessions", auth.BasicAuth(api.Sessions))
+	http.HandleFunc("/api/games", auth.BasicAuth(api.Games))
 
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		pkg.ServeWs(hub, w, r)
