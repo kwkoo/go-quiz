@@ -3,6 +3,7 @@ var app = new Vue({
 
     data: {
         screen: 'start',
+        message: '',
         quiz: {
             name: '',
             questionduration: 20,
@@ -32,17 +33,24 @@ var app = new Vue({
         },
 
         updateDatabase: function() {
+            console.log("update")
             // remove empty answers
+            let errors = []
             copy = JSON.parse(JSON.stringify(this.quiz))
             copy.questions.forEach(function (question, index) {
                 while (question.answers.length > 0 && question.answers[question.answers.length-1] == '') {
                     question.answers.splice(-1, 1)
                 }
                 if (question.correct < 0 || question.correct >= question.answers.length) {
-                    alert("Invalid correct field for question " + index)
-                    return
+                    errors.push("Invalid correct field for question " + index)
                 }
             })
+
+            if (errors.length > 0) {
+                this.message = errors.join(', ')
+                this.screen = 'message'
+                return
+            }
 
             console.log(JSON.stringify(copy))
             // todo: send this to the server
@@ -51,6 +59,11 @@ var app = new Vue({
 
         cancelQuiz: function() {
             // todo: send this to list quiz view
-        }
+        },
+
+        dismissMessage: function() {
+            this.screen = 'start'
+            this.message = ''
+        },
     }
 })

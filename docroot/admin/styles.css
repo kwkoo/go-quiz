@@ -21,6 +21,13 @@
     font-family: 'Raleway', sans-serif;
 }
 
+.subtitle {
+    /* color: white; */
+    text-align: center;
+    font-size: 20px;
+    font-family: 'Raleway', sans-serif;
+}
+
 .commonTitle {
     font-family: 'Raleway', sans-serif;
 }
@@ -31,4 +38,21 @@
 
 .even {
     background-color: rgb(51, 153, 255);
+}
+
+.button {
+    width: 50%;
+    background-color: #4CAF50;
+    color: white;
+    padding: 14px 20px;
+    margin: 8px 0;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    display: block;
+    margin-right: auto;
+    margin-left: auto;
+    font-size: 20px;
+    background-color: #3A3B3A;
+    font-family: 'Raleway', sans-serif;
 }
