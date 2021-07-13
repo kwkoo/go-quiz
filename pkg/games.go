@@ -473,12 +473,15 @@ func (g *Games) Add(host string) (int, error) {
 
 	for i := 0; i < 5; i++ {
 		pin := generatePin()
-		if _, ok := g.all[pin]; !ok {
-			game.Pin = pin
-			g.all[pin] = &game
-			g.persist(&game)
-			return pin, nil
+		if exists, _ := g.getGamePointer(pin); exists != nil {
+			continue
 		}
+		game.Pin = pin
+		g.mutex.Lock()
+		g.all[pin] = &game
+		g.mutex.Unlock()
+		g.persist(&game)
+		return pin, nil
 	}
 	return 0, errors.New("could not generate unique game pin")
 }

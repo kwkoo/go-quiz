@@ -115,3 +115,11 @@ func (engine *PersistenceEngine) Delete(key string) {
 
 	conn.Do("DEL", key)
 }
+
+func (engine *PersistenceEngine) Incr(counterKey string) (int, error) {
+
+	conn := engine.pool.Get()
+	defer conn.Close()
+
+	return redis.Int(conn.Do("INCR", counterKey))
+}

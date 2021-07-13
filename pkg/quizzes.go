@@ -115,9 +115,11 @@ func (q *Quizzes) Delete(id int) {
 }
 
 func (q *Quizzes) Add(quiz Quiz) (Quiz, error) {
-	q.mutex.Lock()
-	defer q.mutex.Unlock()
-	quiz.Id = q.nextID()
+	var err error
+	quiz.Id, err = q.nextID()
+	if err != nil {
+		return Quiz{}, err
+	}
 
 	if q.engine != nil {
 		var b bytes.Buffer
@@ -130,7 +132,9 @@ func (q *Quizzes) Add(quiz Quiz) (Quiz, error) {
 		}
 	}
 
+	q.mutex.Lock()
 	q.all[quiz.Id] = quiz
+	q.mutex.Unlock()
 	return quiz, nil
 }
 
@@ -144,14 +148,23 @@ func (q *Quizzes) Update(quiz Quiz) error {
 	return nil
 }
 
-func (q *Quizzes) nextID() int {
-	highest := 0
-	for key := range q.all {
-		if key > highest {
-			highest = key
+func (q *Quizzes) nextID() (int, error) {
+	if q.engine == nil {
+		q.mutex.RLock()
+		defer q.mutex.RUnlock()
+		highest := 0
+		for key := range q.all {
+			if key > highest {
+				highest = key
+			}
 		}
+		return highest + 1, nil
 	}
-	return highest + 1
+	id, err := q.engine.Incr("quizid")
+	if err != nil {
+		return 0, fmt.Errorf("error generating quiz ID from persistent store: %v", err)
+	}
+	return id, nil
 }
 
 // Ingests an array of Quiz objects in JSON
