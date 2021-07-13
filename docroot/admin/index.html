@@ -1,9 +1,56 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Admin Page</title>
+  <title>Quiz Creator</title>
+  <link href="https://fonts.googleapis.com/css?family=Raleway" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://unpkg.com/vue"></script>
 </head>
 <body>
-    <h1>Admin Page</h1>
+  <div id="app">
+    <h1 class="title">Quiz Creator Studio</h1>
+
+    <div class="form-field">
+      <label class="commonTitle">Quiz Title</label>
+      <input v-model="quiz.name" type="text"/>
+    </div>
+    <div class="form-field">
+      <label class="commonTitle">Question Duration</label>
+      <input v-model="quiz.questionduration" type="number"/>
+    </div>
+    <br><br>
+    <div v-for="(question, index) in quiz.questions"> <!-- all questions -->
+      <!-- each question here -->
+      <div class="question-field" v-bind:class="{odd: index%2 == 1, even: index%2 == 0}">
+        <label>Question {{ index }}: </label>
+        <input v-model="question.question" class="question" type="text"/>
+        <br><br>
+        <label>Answer 0: </label>
+        <input v-model="question.answers[0]" type="text"/>
+        <label>Answer 1: </label>
+        <input v-model="question.answers[1]" type="text"/>
+        <br><br>
+        <label>Answer 2: </label>
+        <input v-model="question.answers[2]" type="text"/>
+        <label>Answer 3: </label>
+        <input v-model="question.answers[3]" type="text"/>
+        <br><br>
+        <label>Correct Answer (0-3): </label>
+        <input v-model="question.correct" class="correct" type="number"/>
+        <br><br>
+        <button v-on:click="deleteQuestion(index)">Delete Question</button>
+      </div>
+      <br><br>
+    </div>
+    <br>
+    <button v-on:click="addQuestion">Add Another Question</button>
+    <br><br>
+    <div class="form-field">
+      <button v-on:click="updateDatabase">Create Quiz</button>
+    </div>
+    <br>
+    <button v-on:click="cancelQuiz">Cancel</button>
+  </div>
+  <script src="app.js"></script>
 </body>
 </html>
