@@ -83,3 +83,16 @@ Other messages:
 
 * player → server: query-display-choices - sent when the player reconnects while his state is in the answerquestion screen
 * player → server: query-player-results - sent when the player reconnects while his state is in the displayplayerresults screen
+
+
+## Host Authentication Messages
+
+* host → server: host-game
+* *server checks host's session and finds that the Admin flag is false*
+* server → host: screen authenticateuser
+* *host enters invalid credentials*
+* host → server: adminlogin BASE64ENCODEDCREDENTIALS
+* server → host: invalidcredentials
+* *host enters valid credentials*
+* host → server: adminlogin BASE64ENCODEDCREDENTIALS
+* server → host: screen hostselectquiz
