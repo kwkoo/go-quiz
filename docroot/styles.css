@@ -56,6 +56,24 @@ body {
     font-family: 'Raleway', sans-serif;
 }
 
+/* copy of button with a smaller width */
+.buttonauth {
+    width: 40%;
+    background-color: #4CAF50;
+    color: white;
+    padding: 14px 20px;
+    margin: 8px 0;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    display: block;
+    margin-right: auto;
+    margin-left: auto;
+    font-size: 20px;
+    background-color: #3A3B3A;
+    font-family: 'Raleway', sans-serif;
+}
+
 .center {
     display: flex;
     align-items: center;

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -140,6 +141,12 @@ func (c *Client) screen(s string) {
 		c.errorMessage("session does not exist anymore")
 		return
 	}
+
+	// ensure that session is admin if trying to access host screens
+	if strings.HasPrefix(s, "host") && !session.Admin {
+		s = "authenticateuser"
+	}
+
 	switch s {
 	case "hostselectquiz":
 		type meta struct {

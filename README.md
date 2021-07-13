@@ -11,9 +11,7 @@ A Kahoot clone.
 
 ## To-Do
 
-* ensure user is admin when accessing hosting functions
-* expire sessions if persistence is off
-* persistence
+* expire in-memory sessions
 * quiz creation API
 * quiz creation frontend
 * admin API to manipulate game state

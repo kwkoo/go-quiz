@@ -11,11 +11,12 @@ import (
 const sessionExpiry = 600 // session expiry in seconds
 
 type Session struct {
-	Id      string
-	Client  *Client
-	Screen  string
-	Gamepin int
-	Name    string
+	Id      string  `json:"id"`
+	Client  *Client `json:"client"`
+	Screen  string  `json:"screen"`
+	Gamepin int     `json:"gamepin"`
+	Name    string  `json:"name"`
+	Admin   bool    `json:"admin"`
 }
 
 func unmarshalSession(b []byte) (*Session, error) {
@@ -50,12 +51,14 @@ type Sessions struct {
 	mutex  sync.RWMutex
 	all    map[string]*Session
 	engine *PersistenceEngine
+	auth   *Auth
 }
 
-func InitSessions(engine *PersistenceEngine) *Sessions {
+func InitSessions(engine *PersistenceEngine, auth *Auth) *Sessions {
 	sessions := Sessions{
 		all:    make(map[string]*Session),
 		engine: engine,
+		auth:   auth,
 	}
 
 	keys, err := engine.GetKeys("session")
@@ -276,4 +279,30 @@ func (s *Sessions) ConvertSessionIdsToNames(ids []string) []string {
 	}
 
 	return names
+}
+
+func (s *Sessions) SessionIsAdmin(id string) bool {
+	session := s.GetSession(id)
+	if session == nil {
+		return false
+	}
+	return session.Admin
+}
+
+// Credentials is in the basic auth format (base64 encoding of
+// username:password).
+// Returns true if user is authenticated.
+func (s *Sessions) AuthenticateAdmin(id, credentials string) bool {
+	session := s.GetSession(id)
+	if session.Admin {
+		return true
+	}
+	if s.auth.Base64Authenticated(credentials) {
+		s.mutex.Lock()
+		session.Admin = true
+		s.mutex.Unlock()
+		s.persist(session)
+		return true
+	}
+	return false
 }

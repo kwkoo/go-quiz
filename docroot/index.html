@@ -62,6 +62,25 @@
     </div>
 
 
+    <div v-show="screen === 'authenticateuser'">
+      <h1 class="title">Admin Authentication</h1>
+      <div>
+        <label class="label">Username</label>
+        <input class="forminput" v-model="authenticateuser.username">
+      </div>
+      <br>
+      <div>
+        <label class="label">Password</label>
+        <input class="forminput" v-model="authenticateuser.password" type="password">
+      </div>
+      <br>
+      <div class="center">
+        <button class="buttonauth" v-on:click="cancelAuthentication">Cancel</button>
+        <button class="buttonauth" v-on:click="adminLogin" :disabled='authenticateuser.username == "" || authenticateuser.password == ""'>Login</button>
+      </div>
+    </div>
+
+
     <!-- Host Screens -->
 
     <div v-show="screen === 'hostselectquiz'">

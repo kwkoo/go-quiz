@@ -36,7 +36,7 @@ type Hub struct {
 	games *Games
 }
 
-func NewHub(redisHost, redisPassword string) *Hub {
+func NewHub(redisHost, redisPassword string, auth *Auth) *Hub {
 	persistenceEngine := InitRedis(redisHost, redisPassword)
 
 	quizzes, err := InitQuizzes(persistenceEngine)
@@ -49,7 +49,7 @@ func NewHub(redisHost, redisPassword string) *Hub {
 		register:         make(chan *Client),
 		unregister:       make(chan *Client),
 		clients:          make(map[*Client]bool),
-		sessions:         InitSessions(persistenceEngine),
+		sessions:         InitSessions(persistenceEngine, auth),
 		quizzes:          quizzes,
 		games:            InitGames(persistenceEngine),
 	}
@@ -111,6 +111,16 @@ func (h *Hub) processMessage(m *ClientCommand) {
 	}
 
 	switch m.cmd {
+
+	case "adminlogin":
+		if h.sessions.AuthenticateAdmin(m.client.sessionid, m.arg) {
+			m.client.screen("hostselectquiz")
+			return
+		}
+
+		// invalid credentials
+		m.client.sendMessage("invalidcredentials")
+		return
 
 	case "join-game":
 		pinfo := struct {

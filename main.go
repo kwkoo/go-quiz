@@ -53,7 +53,7 @@ func main() {
 	cookieGen := pkg.InitCookieGenerator(fileServer)
 	http.HandleFunc("/", cookieGen.ServeHTTP)
 
-	hub := pkg.NewHub(config.RedisHost, config.RedisPassword)
+	hub := pkg.NewHub(config.RedisHost, config.RedisPassword, auth)
 	go hub.Run()
 
 	api := pkg.InitRestApi(hub)

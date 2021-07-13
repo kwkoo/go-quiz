@@ -59,8 +59,17 @@ function processIncoming(app, s) {
                 case 'hostshowgameresults':
                     app.hostshowgameresults.disabled = false
                     break
+                case 'authenticateuser':
+                    app.authenticateuser.previousscreen = 'entrance'
+                    app.authenticateuser.username = ''
+                    app.authenticateuser.password = ''
+                    break
             }
             app.screen = arg
+            break
+
+        case 'invalidcredentials':
+            app.showError('Invlide Credentials', app.screen)
             break
 
         case 'display-choices':
@@ -184,6 +193,7 @@ var app = new Vue({
         entrance: { data: {pin: 0, name: ''}, disabled: true },
         answerquestion: { answercount: 0, disabled: true },
         displayplayerresults: { data: {correct: false, score: 0}, disabled: true },
+        authenticateuser: { username: '', password: '', previousscreen: '' },
 
         hostselectquiz: { quizzes: [], disabled: true },
         hostgamelobby: { data: { pin: 0, players: [] }, textarea: '', link: '', disabled: true },
@@ -258,6 +268,15 @@ var app = new Vue({
             this.error.message = ''
             this.error.next = ''
             this.error.disabled = true
+        },
+
+        cancelAuthentication: function() {
+            this.screen = this.authenticateuser.previousscreen
+            this.authenticateuser.previousscreen = ''
+        },
+
+        adminLogin: function() {
+            this.sendCommand('adminlogin ' + btoa(this.authenticateuser.username + ':' + this.authenticateuser.password))
         },
 
         joinGame: function() {
