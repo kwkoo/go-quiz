@@ -38,6 +38,7 @@ type Hub struct {
 
 func NewHub(redisHost, redisPassword string, auth *Auth) *Hub {
 	persistenceEngine := InitRedis(redisHost, redisPassword)
+	RegisterShutdownHandler(persistenceEngine.Shutdown)
 
 	quizzes, err := InitQuizzes(persistenceEngine)
 	if err != nil {

@@ -3,9 +3,6 @@ package pkg
 import (
 	"fmt"
 	"log"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/gomodule/redigo/redis"
@@ -47,17 +44,12 @@ func InitRedis(redisHost, redisPassword string) *PersistenceEngine {
 		},
 	}
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	signal.Notify(c, syscall.SIGTERM)
-	go func() {
-		<-c
-		pool.Close()
-		log.Print("shutdown redis connection pool")
-		os.Exit(0)
-	}()
-
 	return &PersistenceEngine{pool: &pool}
+}
+
+func (engine *PersistenceEngine) Shutdown() {
+	engine.pool.Close()
+	log.Print("successfully shutdown redis connection pool")
 }
 
 func (engine *PersistenceEngine) GetKeys(prefix string) ([]string, error) {

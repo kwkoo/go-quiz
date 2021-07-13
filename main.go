@@ -30,6 +30,8 @@ func main() {
 		log.Fatal(err)
 	}
 
+	pkg.InitShutdownHandler()
+
 	var filesystem http.FileSystem
 	if len(config.Docroot) > 0 {
 		log.Printf("using %s in the file system as the document root", config.Docroot)
