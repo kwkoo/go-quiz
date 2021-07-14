@@ -2,11 +2,11 @@ var app = new Vue({
     el: '#app',
 
     data: {
-        screen: 'start',
-        message: '',
+        screen: 'creator',
+        message: { text: '', next: ''},
         quiz: {
             name: '',
-            questionduration: 20,
+            questionDuration: 20,
             questions: [
                 {
                     question: '',
@@ -20,7 +20,6 @@ var app = new Vue({
     methods: {
 
         addQuestion: function() {
-            console.log("add")
             this.quiz.questions.push({
                 question: '',
                 answers: ['', '', '', ''],
@@ -33,7 +32,11 @@ var app = new Vue({
         },
 
         updateDatabase: function() {
-            console.log("update")
+            if (this.quiz.name == '') {
+                this.showMessage('Please fill in the quiz title', 'creator')
+                return
+            }
+
             // remove empty answers
             let errors = []
             copy = JSON.parse(JSON.stringify(this.quiz))
@@ -47,23 +50,51 @@ var app = new Vue({
             })
 
             if (errors.length > 0) {
-                this.message = errors.join(', ')
-                this.screen = 'message'
+                this.showMessage(errors.join(', '), 'creator')
                 return
             }
 
-            console.log(JSON.stringify(copy))
-            // todo: send this to the server
-            // todo: send this to list quiz view
+            let xhr = new XMLHttpRequest()
+            let that = this
+            xhr.onreadystatechange = function() {
+                console.log('readyState: ' + this.readyState)
+                if (this.readyState == 4) {
+                    try {
+                        let data = JSON.parse(xhr.responseText)
+                        if (data.success) {
+                            that.showMessage('Quiz added', 'creator') // todo: should send this to list view
+                            console.log('success')
+                        } else {
+                            console.log('error')
+                            that.showMessage(data.error, '')
+                        }
+                    } catch (err) {
+                        console.log('exception')
+                        that.showMessage(err, '')
+                    }
+                }
+            }
+            xhr.open('PUT', '/api/quiz')
+            xhr.setRequestHeader('Content-Type', 'application/json;charset=UTF-8')
+            xhr.send(JSON.stringify(copy))
         },
 
         cancelQuiz: function() {
             // todo: send this to list quiz view
         },
 
+        showMessage: function(message, next) {
+            this.message.text = message
+            this.message.next = next
+            this.screen = 'message'
+        },
+
         dismissMessage: function() {
-            this.screen = 'start'
-            this.message = ''
+            if (this.message.next != '') {
+                this.screen = this.message.next
+                this.message.next = ''
+            }
+            this.message.text = ''
         },
     }
 })

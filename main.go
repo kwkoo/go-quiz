@@ -61,9 +61,7 @@ func main() {
 	go hub.Run()
 
 	api := pkg.InitRestApi(hub)
-	http.HandleFunc("/api/quizzes", auth.BasicAuth(api.Quizzes))
-	http.HandleFunc("/api/sessions", auth.BasicAuth(api.Sessions))
-	http.HandleFunc("/api/games", auth.BasicAuth(api.Games))
+	http.HandleFunc("/api/", auth.BasicAuth(api.ServeHTTP))
 
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		pkg.ServeWs(hub, w, r)
@@ -73,14 +71,15 @@ func main() {
 		Addr: fmt.Sprintf(":%d", config.Port),
 	}
 
-	shutdownChan, shutdownWG := pkg.GetShutdownArtifacts()
-	shutdownWG.Add(1)
+	shutdownArtifacts := pkg.GetShutdownArtifacts()
+	shutdownArtifacts.Wg.Add(1)
+
 	go func() {
 		log.Printf("listening on port %v", config.Port)
 		if err := server.ListenAndServe(); err != nil {
 			if err == http.ErrServerClosed {
 				log.Print("web server graceful shutdown")
-				shutdownWG.Done()
+				shutdownArtifacts.Wg.Done()
 				return
 			}
 			log.Fatal(err)
@@ -88,7 +87,7 @@ func main() {
 	}()
 
 	go func() {
-		<-shutdownChan
+		<-shutdownArtifacts.Ch
 		log.Print("interrupt signal received, initiaing web server shutdown...")
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()

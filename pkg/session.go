@@ -6,9 +6,12 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 )
 
-const sessionExpiry = 600 // session expiry in seconds
+const persistentSessionExpiry = 900 // session expiry in seconds
+const inmemorySessionExpiry = 600
+const reaperInterval = 60
 
 type Session struct {
 	Id      string  `json:"id"`
@@ -17,6 +20,7 @@ type Session struct {
 	Gamepin int     `json:"gamepin"`
 	Name    string  `json:"name"`
 	Admin   bool    `json:"admin"`
+	expiry  time.Time
 }
 
 func unmarshalSession(b []byte) (*Session, error) {
@@ -54,7 +58,7 @@ type Sessions struct {
 	auth   *Auth
 }
 
-func InitSessions(engine *PersistenceEngine, auth *Auth) *Sessions {
+func InitSessions(engine *PersistenceEngine, auth *Auth, shutdownArtifacts *ShutdownArtifacts) *Sessions {
 	sessions := Sessions{
 		all:    make(map[string]*Session),
 		engine: engine,
@@ -73,6 +77,21 @@ func InitSessions(engine *PersistenceEngine, auth *Auth) *Sessions {
 		sessions.UpdateClientForSession(key, nil)
 	}
 
+	// todo: kick off session reaper here
+	shutdownArtifacts.Wg.Add(1)
+	go func() {
+		for {
+			select {
+			case <-shutdownArtifacts.Ch:
+				log.Printf("shutting down session reaper")
+				shutdownArtifacts.Wg.Done()
+				return
+			case <-time.After(reaperInterval * time.Second):
+				sessions.expireSessions()
+			}
+		}
+	}()
+
 	return &sessions
 }
 
@@ -81,6 +100,7 @@ func (s *Sessions) NewSession(id string, client *Client, screen string) *Session
 		Id:     id,
 		Client: client,
 		Screen: screen,
+		expiry: time.Now().Add(inmemorySessionExpiry * time.Second),
 	}
 
 	s.mutex.Lock()
@@ -91,7 +111,21 @@ func (s *Sessions) NewSession(id string, client *Client, screen string) *Session
 	return session
 }
 
+func (s *Sessions) expireSessions() {
+	now := time.Now()
+	s.mutex.Lock()
+	for id, session := range s.all {
+		if now.After(session.expiry) {
+			delete(s.all, id)
+			log.Printf("expiring session %s", id)
+		}
+	}
+	s.mutex.Unlock()
+}
+
 func (s *Sessions) persist(session *Session) {
+	session.expiry = time.Now().Add(inmemorySessionExpiry * time.Second)
+
 	if s.engine == nil {
 		return
 	}
@@ -102,7 +136,7 @@ func (s *Sessions) persist(session *Session) {
 		return
 	}
 
-	if err := s.engine.Set(fmt.Sprintf("session:%s", session.Id), data, sessionExpiry); err != nil {
+	if err := s.engine.Set(fmt.Sprintf("session:%s", session.Id), data, persistentSessionExpiry); err != nil {
 		log.Printf("error persisting session %s to redis: %v", session.Id, err)
 	}
 }
@@ -237,6 +271,7 @@ func (s *Sessions) DeregisterGameFromSession(id string) {
 
 	s.mutex.Lock()
 	session.Gamepin = 0
+	session.Screen = "entrance"
 	s.mutex.Unlock()
 	s.persist(session)
 }

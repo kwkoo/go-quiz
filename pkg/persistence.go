@@ -3,7 +3,6 @@ package pkg
 import (
 	"fmt"
 	"log"
-	"sync"
 	"time"
 
 	"github.com/gomodule/redigo/redis"
@@ -16,7 +15,7 @@ type PersistenceEngine struct {
 // Redis helper functions
 // Copied from https://github.com/pete911/examples-redigo
 
-func InitRedis(redisHost, redisPassword string) *PersistenceEngine {
+func InitRedis(redisHost, redisPassword string, shutdownArtifacts *ShutdownArtifacts) *PersistenceEngine {
 	// init redis connection pool
 	// copied from https://github.com/pete911/examples-redigo
 	pool := redis.Pool{
@@ -45,17 +44,15 @@ func InitRedis(redisHost, redisPassword string) *PersistenceEngine {
 		},
 	}
 
-	return &PersistenceEngine{pool: &pool}
-}
-
-func (engine *PersistenceEngine) RegisterShutdownHandler(shutdownChan chan struct{}, wg *sync.WaitGroup) {
-	wg.Add(1)
+	shutdownArtifacts.Wg.Add(1)
 	go func() {
-		<-shutdownChan
-		engine.pool.Close()
+		<-shutdownArtifacts.Ch
+		pool.Close()
 		log.Print("persistence engine graceful shutdown")
-		wg.Done()
+		shutdownArtifacts.Wg.Done()
 	}()
+
+	return &PersistenceEngine{pool: &pool}
 }
 
 func (engine *PersistenceEngine) GetKeys(prefix string) ([]string, error) {

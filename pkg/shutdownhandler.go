@@ -8,14 +8,18 @@ import (
 	"syscall"
 )
 
+type ShutdownArtifacts struct {
+	Ch chan struct{}  // this channel will be closed when the relevant signals are received
+	Wg sync.WaitGroup // shutdown handlers will Add to this WaitGroup - the process will Wait on this WaitGroup before exiting
+}
+
 var (
-	signalChan   chan os.Signal
-	shutdownChan chan struct{} // this channel will be closed when the relevant signals are received
-	shutdownWG   sync.WaitGroup
+	signalChan        chan os.Signal
+	shutdownArtifacts ShutdownArtifacts
 )
 
 func InitShutdownHandler() {
-	shutdownChan = make(chan struct{})
+	shutdownArtifacts.Ch = make(chan struct{})
 
 	signalChan = make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt)
@@ -27,11 +31,11 @@ func WaitForShutdown() {
 	log.Print("received signal - shutting down gracefully...")
 
 	// we received a signal - proceed to call all registered listeners
-	close(shutdownChan)
-	shutdownWG.Wait()
+	close(shutdownArtifacts.Ch)
+	shutdownArtifacts.Wg.Wait()
 	log.Print("All shutdown listeners are done")
 }
 
-func GetShutdownArtifacts() (chan struct{}, *sync.WaitGroup) {
-	return shutdownChan, &shutdownWG
+func GetShutdownArtifacts() *ShutdownArtifacts {
+	return &shutdownArtifacts
 }

@@ -38,6 +38,25 @@ func (q Quiz) GetQuestion(i int) (QuizQuestion, error) {
 	return q.Questions[i], nil
 }
 
+func (q Quiz) marshal() ([]byte, error) {
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
+	if err := enc.Encode(q); err != nil {
+		return nil, fmt.Errorf("error converting quiz to JSON: %v", err)
+	}
+	return b.Bytes(), nil
+}
+
+// Ingests a single Quiz object in JSON
+func UnmarshalQuiz(r io.Reader) (Quiz, error) {
+	dec := json.NewDecoder(r)
+	var quiz Quiz
+	if err := dec.Decode(&quiz); err != nil {
+		return Quiz{}, err
+	}
+	return quiz, nil
+}
+
 type Quizzes struct {
 	all    map[int]Quiz
 	mutex  sync.RWMutex
@@ -110,8 +129,12 @@ func (q *Quizzes) Get(id int) (Quiz, error) {
 
 func (q *Quizzes) Delete(id int) {
 	q.mutex.Lock()
-	defer q.mutex.Unlock()
 	delete(q.all, id)
+	q.mutex.Unlock()
+
+	if q.engine != nil {
+		q.engine.Delete(fmt.Sprintf("quiz:%d", id))
+	}
 }
 
 func (q *Quizzes) Add(quiz Quiz) (Quiz, error) {
@@ -122,12 +145,11 @@ func (q *Quizzes) Add(quiz Quiz) (Quiz, error) {
 	}
 
 	if q.engine != nil {
-		var b bytes.Buffer
-		enc := json.NewEncoder(&b)
-		if err := enc.Encode(quiz); err != nil {
+		encoded, err := quiz.marshal()
+		if err != nil {
 			return Quiz{}, fmt.Errorf("error converting quiz to JSON: %v", err)
 		}
-		if err := q.engine.Set(fmt.Sprintf("quiz:%d", quiz.Id), b.Bytes(), 0); err != nil {
+		if err := q.engine.Set(fmt.Sprintf("quiz:%d", quiz.Id), encoded, 0); err != nil {
 			return Quiz{}, fmt.Errorf("error persisting quiz to redis: %v", err)
 		}
 	}
@@ -140,11 +162,18 @@ func (q *Quizzes) Add(quiz Quiz) (Quiz, error) {
 
 func (q *Quizzes) Update(quiz Quiz) error {
 	q.mutex.Lock()
-	defer q.mutex.Unlock()
-	if _, ok := q.all[quiz.Id]; !ok {
-		return fmt.Errorf("quiz id %d does not exist", quiz.Id)
-	}
 	q.all[quiz.Id] = quiz
+	q.mutex.Unlock()
+
+	if q.engine != nil {
+		encoded, err := quiz.marshal()
+		if err != nil {
+			return fmt.Errorf("error converting quiz to JSON: %v", err)
+		}
+		if err := q.engine.Set(fmt.Sprintf("quiz:%d", quiz.Id), encoded, 0); err != nil {
+			return fmt.Errorf("error persisting quiz to redis: %v", err)
+		}
+	}
 	return nil
 }
 

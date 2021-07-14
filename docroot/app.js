@@ -26,6 +26,10 @@ function processIncoming(app, s) {
 
     console.log('cmd=' + cmd + ',arg=' + arg)
     switch (cmd) {
+        case 'reregistersession':
+            app.registerSession()
+            break
+
         case 'screen':
             if (app.screen == 'displayplayerresults') {
                 // set flag to disabled when we switch away from it
@@ -65,11 +69,11 @@ function processIncoming(app, s) {
                     app.authenticateuser.password = ''
                     break
             }
-            app.screen = arg
+            app.showScreen(arg)
             break
 
         case 'invalidcredentials':
-            app.showError('Invlide Credentials', app.screen)
+            app.showError('Invalid Credentials', app.screen)
             break
 
         case 'display-choices':
@@ -176,7 +180,12 @@ function processIncoming(app, s) {
             break
 
         case 'error':
-            app.showError(arg, app.screen)
+            try {
+                data = JSON.parse(arg)
+                app.showError(data.message, data.nextscreen)
+            } catch (err) {
+                console.log('err: ' + err)
+            }
             break
 
         default:
@@ -218,14 +227,15 @@ var app = new Vue({
     mounted: function() {
         this.sessionid = readCookie('quizsession')
         if (this.sessionid == null || this.sessionid.length == 0) {
-            this.showError('Please enable cookies')
+            this.showError('Please enable cookies in your browser')
             return
         }
         if (window["WebSocket"]) {
             var that = this
             that.conn = new WebSocket("ws://" + document.location.host + "/ws")
             that.conn.onopen = function (evt) {
-                that.sendCommand("session " + that.sessionid)
+                that.showScreen('entrance')
+                that.registerSession()
             }
             that.conn.onclose = function (evt) {
                 that.showError('Connection closed')
@@ -243,16 +253,34 @@ var app = new Vue({
 
     methods: {
 
+        showScreen: function(target) {
+            switch (target) {
+                case 'hostselectquiz':
+                    this.hostselectquiz.disabled = false
+                    break
+                case 'entrance':
+                    this.entrance.disabled = false
+                    break
+            }
+            this.screen = target
+        },
+
         handleResize: function() {
             this.window.width = window.innerWidth;
             this.window.height = window.innerHeight;
         },
 
+        registerSession: function() {
+            this.sendCommand('session ' + this.sessionid)
+        },
+
         showError: function(message, next) {
             this.error.disabled = false
             this.error.message = message
-            this.error.next = next
-            this.screen = 'error'
+            if (next) {
+                this.error.next = next
+            }
+            this.showScreen('error')
         },
 
         setPinFromURL: function() {
@@ -264,14 +292,14 @@ var app = new Vue({
         },
 
         dismissError: function() {
-            this.screen = this.error.next
+            this.showScreen(this.error.next)
             this.error.message = ''
             this.error.next = ''
             this.error.disabled = true
         },
 
         cancelAuthentication: function() {
-            this.screen = this.authenticateuser.previousscreen
+            this.showScreen(this.authenticateuser.previousscreen)
             this.authenticateuser.previousscreen = ''
         },
 
@@ -284,6 +312,7 @@ var app = new Vue({
                 this.showError('Please fill in the name field', this.screen)
                 return
             }
+            console.log('sending command to join game')
             this.sendCommand('join-game ' + JSON.stringify({name: this.entrance.data.name, pin: parseInt(this.entrance.data.pin)}))
         },
 

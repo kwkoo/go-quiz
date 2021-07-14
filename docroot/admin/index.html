@@ -10,7 +10,7 @@
 
 <body>
   <div id="app">
-    <div v-show="screen === 'start'">
+    <div v-show="screen === 'creator'">
       <h1 class="title">Quiz Creator Studio</h1>
 
       <div class="form-field">
@@ -19,7 +19,7 @@
       </div>
       <div class="form-field">
         <label class="commonTitle">Question Duration</label>
-        <input v-model="quiz.questionduration" type="number" />
+        <input v-model.number="quiz.questionDuration" type="number" />
       </div>
       <br><br>
       <div v-for="(question, index) in quiz.questions">
@@ -40,7 +40,7 @@
           <input v-model="question.answers[3]" type="text" />
           <br><br>
           <label>Correct Answer (0-3): </label>
-          <input v-model="question.correct" class="correct" type="number" />
+          <input v-model.number="question.correct" class="correct" type="number" />
           <br><br>
           <button v-on:click="deleteQuestion(index)">Delete Question</button>
         </div>
@@ -56,8 +56,8 @@
       <button v-on:click="cancelQuiz">Cancel</button>
     </div>
     <div v-show="screen ==='message'">
-      <div class="subtitle">{{ message }}</div>
-      <button class="button" v-on:click="dismissMessage">OK</button>
+      <div class="subtitle">{{ message.text }}</div>
+      <button class="button" v-show="message.next != ''" v-on:click="dismissMessage">OK</button>
     </div>
   </div>
   <script src="app.js"></script>

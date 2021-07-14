@@ -462,9 +462,6 @@ func (g *Games) getAll() []Game {
 }
 
 func (g *Games) Add(host string) (int, error) {
-	g.mutex.Lock()
-	defer g.mutex.Unlock()
-
 	game := Game{
 		Host:            host,
 		Players:         make(map[string]int),
@@ -584,6 +581,10 @@ func (g *Games) AddPlayerToGame(sessionid string, pin int) error {
 		return fmt.Errorf("game with pin %d does not exist", pin)
 	}
 
+	if game.GameState != GameNotStarted {
+		return errors.New("game is not accepting new players")
+	}
+
 	g.mutex.Lock()
 	changed := game.addPlayer(sessionid)
 	g.mutex.Unlock()
@@ -667,23 +668,6 @@ func (g *Games) GetCurrentQuestion(pin int) (GameCurrentQuestion, error) {
 
 	return currentQuestion, err
 }
-
-/*
-func (g *Games) GetAnsweredCount(pin int) (int, int, error) {
-	g.mutex.RLock()
-	defer g.mutex.RUnlock()
-	game, ok := g.all[pin]
-	if !ok {
-		return 0, 0, fmt.Errorf("game with pin %d does not exist", pin)
-	}
-
-	if game.GameState != QuestionInProgress {
-		return 0, 0, fmt.Errorf("game with pin %d is not showing a live question", pin)
-	}
-
-	return len(game.PlayersAnswered), len(game.Players), nil
-}
-*/
 
 func (g *Games) RegisterAnswer(pin int, sessionid string, answerIndex int) (AnswersUpdate, error) {
 	game, err := g.getGamePointer(pin)

@@ -51,4 +51,4 @@ redis:
 	  redis:5
 
 importquizzes:
-	@curl -XPUT -u admin:$(ADMINPASSWORD) -d @$(BASE)/quizzes.json http://localhost:8080/api/quizzes
+	@curl -XPUT -u admin:$(ADMINPASSWORD) -d @$(BASE)/quizzes.json http://localhost:8080/api/quiz/bulk

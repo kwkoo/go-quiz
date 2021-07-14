@@ -131,14 +131,26 @@ func (c *Client) sendMessage(s string) {
 	c.send <- []byte(s)
 }
 
-func (c *Client) errorMessage(s string) {
-	c.sendMessage("error " + s)
+func (c *Client) errorMessage(message, nextscreen string) {
+	data := struct {
+		Message    string `json:"message"`
+		NextScreen string `json:"nextscreen"`
+	}{
+		Message:    message,
+		NextScreen: nextscreen,
+	}
+	encoded, err := convertToJSON(data)
+	if err != nil {
+		log.Printf("error converting payload for error message: %v", err)
+		return
+	}
+	c.sendMessage("error " + encoded)
 }
 
 func (c *Client) screen(s string) {
 	session := c.hub.sessions.GetSession(c.sessionid)
 	if session == nil {
-		c.errorMessage("session does not exist anymore")
+		c.errorMessage("session does not exist anymore", "entrance")
 		return
 	}
 
@@ -163,7 +175,7 @@ func (c *Client) screen(s string) {
 
 		encoded, err := convertToJSON(&ml)
 		if err != nil {
-			c.errorMessage(fmt.Sprintf("error encoding json: %v", err))
+			c.errorMessage(fmt.Sprintf("error encoding json: %v", err), "hostselectquiz")
 			return
 		}
 		c.sendMessage("all-quizzes " + encoded)
@@ -172,7 +184,8 @@ func (c *Client) screen(s string) {
 		// send over game object with lobby-game-metadata
 		game, err := c.hub.games.Get(session.Gamepin)
 		if err != nil {
-			c.errorMessage(fmt.Sprintf("could not retrieve game %d", session.Gamepin))
+			c.errorMessage(fmt.Sprintf("could not retrieve game %d", session.Gamepin), "entrance")
+			c.hub.sessions.SetSessionScreen(session.Id, "entrance")
 			return
 		}
 
@@ -194,7 +207,7 @@ func (c *Client) screen(s string) {
 
 		encoded, err := convertToJSON(&gameMetadata)
 		if err != nil {
-			c.errorMessage("error converting lobby-game-metadata payload to JSON: " + err.Error())
+			c.errorMessage("error converting lobby-game-metadata payload to JSON: "+err.Error(), "")
 			return
 		}
 		c.sendMessage("lobby-game-metadata " + encoded)
@@ -202,7 +215,8 @@ func (c *Client) screen(s string) {
 	case "hostshowquestion":
 		session := c.hub.sessions.GetSession(c.sessionid)
 		if session == nil {
-			c.errorMessage("could not get session")
+			c.sessionid = ""
+			c.errorMessage("could not get session", "entrance")
 			return
 		}
 
@@ -221,13 +235,13 @@ func (c *Client) screen(s string) {
 				return
 			}
 
-			c.errorMessage("error retrieving question: " + err.Error())
+			c.errorMessage("error retrieving question: "+err.Error(), "")
 			return
 		}
 
 		encoded, err := convertToJSON(&currentQuestion)
 		if err != nil {
-			c.errorMessage("error converting question to JSON: " + err.Error())
+			c.errorMessage("error converting question to JSON: "+err.Error(), "")
 			return
 		}
 		c.sendMessage("hostshowquestion " + encoded)
@@ -238,13 +252,14 @@ func (c *Client) screen(s string) {
 	case "hostshowgameresults":
 		session := c.hub.sessions.GetSession(c.sessionid)
 		if session == nil {
-			c.errorMessage("could not get session")
+			c.sessionid = ""
+			c.errorMessage("could not get session", "entrance")
 			return
 		}
 
 		winners, err := c.hub.games.GetWinners(session.Gamepin)
 		if err != nil {
-			c.errorMessage("error retrieving game winners: " + err.Error())
+			c.errorMessage("error retrieving game winners: "+err.Error(), "")
 			return
 		}
 		type FriendlyScore struct {
@@ -265,7 +280,7 @@ func (c *Client) screen(s string) {
 		}
 		encoded, err := convertToJSON(&fl)
 		if err != nil {
-			c.errorMessage("error converting show-winners payload to JSON: " + err.Error())
+			c.errorMessage("error converting show-winners payload to JSON: "+err.Error(), "")
 			return
 		}
 		log.Printf("winners for game %d: %s", session.Gamepin, encoded)
