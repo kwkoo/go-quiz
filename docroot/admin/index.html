@@ -2,7 +2,7 @@
 <html>
 
 <head>
-  <title>Quiz Creator</title>
+  <title>Quiz Admin</title>
   <link href="https://fonts.googleapis.com/css?family=Raleway" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <script src="https://unpkg.com/vue"></script>
@@ -10,6 +10,16 @@
 
 <body>
   <div id="app">
+    <div v-show="screen === 'start'">
+      <h1 class="title">Quiz Admin</h1>
+      <div class="center" v-for="(quiz, index) in list.quizzes">
+        <button class="subtitle spaced" v-on:click="editQuiz(index)">{{ quiz.name }}</button>
+      </div>
+      <br><br>
+      <button class="button" v-on:click="newQuiz()">New Quiz</button>
+    </div>
+
+
     <div v-show="screen === 'creator'">
       <h1 class="title">Quiz Creator Studio</h1>
 

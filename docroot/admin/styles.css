@@ -56,3 +56,13 @@
     background-color: #3A3B3A;
     font-family: 'Raleway', sans-serif;
 }
+
+.center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.spaced {
+    margin: 10px;
+}

@@ -2,7 +2,8 @@ var app = new Vue({
     el: '#app',
 
     data: {
-        screen: 'creator',
+        screen: 'start',
+        list: { quizzes: [] },
         message: { text: '', next: ''},
         quiz: {
             name: '',
@@ -17,7 +18,55 @@ var app = new Vue({
         },
     },
 
+    mounted: function() {
+        let xhr = new XMLHttpRequest()
+        let that = this
+        xhr.onreadystatechange = function() {
+            if (this.readyState == 4) {
+                try {
+                    that.list.quizzes = JSON.parse(xhr.responseText)
+                } catch (err) {
+                    that.showMessage(err, '')
+                }
+            }
+        }
+        xhr.open('GET', '/api/quiz', true)
+        xhr.send()
+    },
+
     methods: {
+
+        showScreen: function(screen) {
+            this.screen = screen
+        },
+
+        newQuiz: function() {
+            this.quiz = {
+                name: '',
+                questionDuration: 20,
+                questions: [
+                    {
+                        question: '',
+                        answers: ['', '', '', ''],
+                        correct: 0
+                    }
+                ]
+            }
+            this.showScreen('creator')
+        },
+
+        editQuiz: function(index) {
+            let copy = JSON.parse(JSON.stringify(this.list.quizzes[index]))
+
+            // ensure that there are 4 answers for every question
+            copy.questions.forEach(function (question, index) {
+                while (question.answers.length < 4) {
+                    question.answers.push('')
+                }
+            })
+            this.quiz = copy
+            this.showScreen('creator')
+        },
 
         addQuestion: function() {
             this.quiz.questions.push({
@@ -62,7 +111,7 @@ var app = new Vue({
                     try {
                         let data = JSON.parse(xhr.responseText)
                         if (data.success) {
-                            that.showMessage('Quiz added', 'creator') // todo: should send this to list view
+                            that.showMessage('Quiz added', 'start')
                             console.log('success')
                         } else {
                             console.log('error')
@@ -80,7 +129,7 @@ var app = new Vue({
         },
 
         cancelQuiz: function() {
-            // todo: send this to list quiz view
+            this.showScreen('start')
         },
 
         showMessage: function(message, next) {
