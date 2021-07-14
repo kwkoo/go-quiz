@@ -10,16 +10,22 @@
 
 <body>
   <div id="app">
+
+    <!-- list quizzes screen -->
     <div v-show="screen === 'start'">
       <h1 class="title">Quiz Admin</h1>
-      <div class="center" v-for="(quiz, index) in list.quizzes">
-        <button class="subtitle spaced" v-on:click="editQuiz(index)">{{ quiz.name }}</button>
+      <div v-show="list.quizzes == null" class="center"><img src="ajax-loader.gif"></div>
+      <div v-show="list.quizzes != null" v-for="(quiz, index) in list.quizzes" class="center">
+        <div class="spaced">
+          <button class="subtitle" v-on:click="editQuiz(index)">{{ quiz.name }}</button>
+          <button v-on:click="deleteQuiz(quiz.id)">&#10060;</button>
+        </div>
       </div>
       <br><br>
       <button class="button" v-on:click="newQuiz()">New Quiz</button>
     </div>
 
-
+    <!-- quiz creator screen -->
     <div v-show="screen === 'creator'">
       <h1 class="title">Quiz Creator Studio</h1>
 
@@ -32,9 +38,9 @@
         <input v-model.number="quiz.questionDuration" type="number" />
       </div>
       <br><br>
+      <!-- all questions -->
       <div v-for="(question, index) in quiz.questions">
-        <!-- all questions -->
-        <!-- each question here -->
+        <!-- each question -->
         <div class="question-field" v-bind:class="{odd: index%2 == 1, even: index%2 == 0}">
           <label>Question {{ index }}: </label>
           <input v-model="question.question" class="question" type="text" />
@@ -60,15 +66,18 @@
       <button v-on:click="addQuestion">Add Another Question</button>
       <br><br>
       <div class="form-field">
-        <button v-on:click="updateDatabase">Create Quiz</button>
+        <button v-on:click="updateDatabase">{{ quiz.id == null?'Create Quiz':'Update Quiz' }}</button>
       </div>
       <br>
       <button v-on:click="cancelQuiz">Cancel</button>
     </div>
+
+    <!-- message screen -->
     <div v-show="screen ==='message'">
       <div class="subtitle">{{ message.text }}</div>
       <button class="button" v-show="message.next != ''" v-on:click="dismissMessage">OK</button>
     </div>
+
   </div>
   <script src="app.js"></script>
 </body>

@@ -105,6 +105,7 @@ func (api *RestApi) Quiz(w http.ResponseWriter, r *http.Request) {
 		streamResponse(w, false, fmt.Sprintf("error parsing JSON: %v", err))
 		return
 	}
+
 	if toImport.Id == 0 {
 		// no ID, so treat this as an add operation
 		if _, err := api.hub.quizzes.Add(toImport); err != nil {
@@ -117,7 +118,7 @@ func (api *RestApi) Quiz(w http.ResponseWriter, r *http.Request) {
 
 	// update
 	if err := api.hub.quizzes.Update(toImport); err != nil {
-		streamResponse(w, false, fmt.Sprintf("error adding quiz: %v", err))
+		streamResponse(w, false, fmt.Sprintf("error updating quiz: %v", err))
 		return
 	}
 	streamResponse(w, true, "")

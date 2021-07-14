@@ -11,7 +11,6 @@ A Kahoot clone.
 
 ## To-Do
 
-* admin UI - list quizzes, edit quiz in Quiz Creator Studio
 * admin API to manipulate game state
 
 

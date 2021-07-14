@@ -3,7 +3,7 @@ var app = new Vue({
 
     data: {
         screen: 'start',
-        list: { quizzes: [] },
+        list: { quizzes: null },
         message: { text: '', next: ''},
         quiz: {
             name: '',
@@ -19,25 +19,44 @@ var app = new Vue({
     },
 
     mounted: function() {
-        let xhr = new XMLHttpRequest()
-        let that = this
-        xhr.onreadystatechange = function() {
-            if (this.readyState == 4) {
-                try {
-                    that.list.quizzes = JSON.parse(xhr.responseText)
-                } catch (err) {
-                    that.showMessage(err, '')
-                }
-            }
-        }
-        xhr.open('GET', '/api/quiz', true)
-        xhr.send()
+        this.loadQuizzes()
     },
 
     methods: {
 
         showScreen: function(screen) {
+            if (screen == 'start') {
+                this.loadQuizzes()
+            }
             this.screen = screen
+        },
+
+        loadQuizzes: function() {
+            let xhr = new XMLHttpRequest()
+            let that = this
+            xhr.onreadystatechange = function() {
+                if (this.readyState == 4) {
+                    try {
+                        that.list.quizzes = JSON.parse(xhr.responseText)
+                    } catch (err) {
+                        that.showMessage(err, '')
+                    }
+                }
+            }
+            xhr.open('GET', '/api/quiz', true)
+            xhr.send()
+        },
+
+        deleteQuiz: function(id) {
+            let xhr = new XMLHttpRequest()
+            let that = this
+            xhr.onreadystatechange = function() {
+                if (this.readyState == 4) {
+                    that.loadQuizzes()
+                }
+            }
+            xhr.open('DELETE', '/api/quiz/' + id)
+            xhr.send()
         },
 
         newQuiz: function() {
@@ -106,7 +125,6 @@ var app = new Vue({
             let xhr = new XMLHttpRequest()
             let that = this
             xhr.onreadystatechange = function() {
-                console.log('readyState: ' + this.readyState)
                 if (this.readyState == 4) {
                     try {
                         let data = JSON.parse(xhr.responseText)
@@ -140,7 +158,7 @@ var app = new Vue({
 
         dismissMessage: function() {
             if (this.message.next != '') {
-                this.screen = this.message.next
+                this.showScreen(this.message.next)
                 this.message.next = ''
             }
             this.message.text = ''
