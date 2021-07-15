@@ -9,8 +9,6 @@ import (
 	"time"
 )
 
-const persistentSessionExpiry = 900 // session expiry in seconds
-const inmemorySessionExpiry = 600
 const reaperInterval = 60
 
 type Session struct {
@@ -54,17 +52,21 @@ func (s *Session) copy() Session {
 }
 
 type Sessions struct {
-	mutex  sync.RWMutex
-	all    map[string]*Session
-	engine *PersistenceEngine
-	auth   *Auth
+	mutex          sync.RWMutex
+	all            map[string]*Session
+	engine         *PersistenceEngine
+	auth           *Auth
+	sessionTimeout int
 }
 
-func InitSessions(engine *PersistenceEngine, auth *Auth, shutdownArtifacts *ShutdownArtifacts) *Sessions {
+func InitSessions(engine *PersistenceEngine, auth *Auth, sessionTimeout int, shutdownArtifacts *ShutdownArtifacts) *Sessions {
+	log.Printf("session timeout set to %d seconds", sessionTimeout)
+
 	sessions := Sessions{
-		all:    make(map[string]*Session),
-		engine: engine,
-		auth:   auth,
+		all:            make(map[string]*Session),
+		engine:         engine,
+		auth:           auth,
+		sessionTimeout: sessionTimeout,
 	}
 
 	keys, err := engine.GetKeys("session")
@@ -102,7 +104,7 @@ func (s *Sessions) NewSession(id string, client *Client, screen string) *Session
 		Id:     id,
 		Client: client,
 		Screen: screen,
-		expiry: time.Now().Add(inmemorySessionExpiry * time.Second),
+		expiry: time.Now().Add(time.Duration(s.sessionTimeout) * time.Second),
 	}
 
 	s.mutex.Lock()
@@ -126,7 +128,7 @@ func (s *Sessions) expireSessions() {
 }
 
 func (s *Sessions) persist(session *Session) {
-	session.expiry = time.Now().Add(inmemorySessionExpiry * time.Second)
+	session.expiry = time.Now().Add(time.Duration(s.sessionTimeout) * time.Second)
 
 	if s.engine == nil {
 		return
@@ -138,7 +140,7 @@ func (s *Sessions) persist(session *Session) {
 		return
 	}
 
-	if err := s.engine.Set(fmt.Sprintf("session:%s", session.Id), data, persistentSessionExpiry); err != nil {
+	if err := s.engine.Set(fmt.Sprintf("session:%s", session.Id), data, s.sessionTimeout); err != nil {
 		log.Printf("error persisting session %s to redis: %v", session.Id, err)
 	}
 }

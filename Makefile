@@ -9,7 +9,7 @@ ADMINPASSWORD="password"
 
 .PHONY: run build clean test coverage image runcontainer redis importquizzes
 run:
-	@ADMINPASSWORD="$(ADMINPASSWORD)" go run main.go -docroot $(BASE)/docroot
+	@ADMINPASSWORD="$(ADMINPASSWORD)" SESSIONTIMEOUT=30 go run main.go -docroot $(BASE)/docroot
 
 build:
 	@echo "Building..."

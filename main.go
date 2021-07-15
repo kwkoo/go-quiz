@@ -21,12 +21,13 @@ var content embed.FS
 
 func main() {
 	config := struct {
-		Port          int    `default:"8080" usage:"HTTP listener port"`
-		Docroot       string `usage:"HTML document root - will use the embedded docroot if not specified"`
-		RedisHost     string `default:"localhost:6379" usage:"Redis host and port"`
-		RedisPassword string `usage:"Redis password"`
-		AdminUser     string `default:"admin" usage:"Admin username"`
-		AdminPassword string `usage:"Admin password"`
+		Port           int    `default:"8080" usage:"HTTP listener port"`
+		Docroot        string `usage:"HTML document root - will use the embedded docroot if not specified"`
+		RedisHost      string `default:"localhost:6379" usage:"Redis host and port"`
+		RedisPassword  string `usage:"Redis password"`
+		AdminUser      string `default:"admin" usage:"Admin username"`
+		AdminPassword  string `usage:"Admin password"`
+		SessionTimeout int    `default:"900" usage:"Timeout in seconds both for in-memory sessions and sessions in the persistent store"`
 	}{}
 	if err := configparser.Parse(&config); err != nil {
 		log.Fatal(err)
@@ -57,7 +58,7 @@ func main() {
 	cookieGen := pkg.InitCookieGenerator(fileServer)
 	http.HandleFunc("/", cookieGen.ServeHTTP)
 
-	hub := pkg.NewHub(config.RedisHost, config.RedisPassword, auth)
+	hub := pkg.NewHub(config.RedisHost, config.RedisPassword, auth, config.SessionTimeout)
 	go hub.Run()
 
 	api := pkg.InitRestApi(hub)

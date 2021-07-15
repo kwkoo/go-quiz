@@ -36,7 +36,7 @@ type Hub struct {
 	games *Games
 }
 
-func NewHub(redisHost, redisPassword string, auth *Auth) *Hub {
+func NewHub(redisHost, redisPassword string, auth *Auth, sessionTimeout int) *Hub {
 	persistenceEngine := InitRedis(redisHost, redisPassword, GetShutdownArtifacts())
 	quizzes, err := InitQuizzes(persistenceEngine)
 	if err != nil {
@@ -48,7 +48,7 @@ func NewHub(redisHost, redisPassword string, auth *Auth) *Hub {
 		register:         make(chan *Client),
 		unregister:       make(chan *Client),
 		clients:          make(map[*Client]bool),
-		sessions:         InitSessions(persistenceEngine, auth, GetShutdownArtifacts()),
+		sessions:         InitSessions(persistenceEngine, auth, sessionTimeout, GetShutdownArtifacts()),
 		quizzes:          quizzes,
 		games:            InitGames(persistenceEngine),
 	}
