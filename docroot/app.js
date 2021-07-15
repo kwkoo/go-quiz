@@ -1,14 +1,3 @@
-// copied from https://stackoverflow.com/a/10730417
-function readCookie(name) {
-    var nameEQ = name + "=";
-    var ca = document.cookie.split(';');
-    for (var i = 0; i < ca.length; i++) {
-        var c = ca[i];
-        while (c.charAt(0) == ' ') c = c.substring(1, c.length);
-        if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length, c.length);
-    }
-    return null;
-}
 
 
 var app = new Vue({
@@ -42,7 +31,7 @@ var app = new Vue({
     },
 
     mounted: function() {
-        this.sessionid = readCookie('quizsession')
+        this.sessionid = this.readCookie('quizsession')
         if (this.sessionid == null || this.sessionid.length == 0) {
             this.showError('Please enable cookies in your browser')
             return
@@ -71,6 +60,18 @@ var app = new Vue({
     },
 
     methods: {
+
+        // copied from https://stackoverflow.com/a/10730417
+        readCookie: function(name) {
+            var nameEQ = name + "="
+            var ca = document.cookie.split(';')
+            for (var i = 0; i < ca.length; i++) {
+                var c = ca[i]
+                while (c.charAt(0) == ' ') c = c.substring(1, c.length)
+                if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length, c.length)
+            }
+            return null
+        },
 
         showScreen: function(target) {
             switch (target) {
