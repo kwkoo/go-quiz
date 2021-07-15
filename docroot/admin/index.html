@@ -72,11 +72,11 @@
     <div v-show="screen === 'creator'">
       <h1 class="title">Quiz Creator Studio</h1>
 
-      <div class="form-field">
+      <div>
         <label class="commonTitle">Quiz Title</label>
         <input v-model="quiz.name" type="text" />
       </div>
-      <div class="form-field">
+      <div>
         <label class="commonTitle">Question Duration</label>
         <input v-model.number="quiz.questionDuration" type="number" />
       </div>
@@ -108,7 +108,7 @@
       <br>
       <button v-on:click="addQuestion">Add Another Question</button>
       <br><br>
-      <div class="form-field">
+      <div>
         <button v-on:click="updateQuiz">{{ quiz.id == null?'Create Quiz':'Update Quiz' }}</button>
       </div>
       <br>
