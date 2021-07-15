@@ -10,189 +10,6 @@ function readCookie(name) {
     return null;
 }
 
-function processIncoming(app, s) {
-    let cmd, arg
-
-    s = s.trim()
-    if (s.length == 0) return
-    let space = s.indexOf(' ')
-    if (space == -1) {
-        cmd = s
-        arg = ''
-    } else {
-        cmd = s.substring(0, space)
-        arg = s.substring(space+1).trim()
-    }
-
-    console.log('cmd=' + cmd + ',arg=' + arg)
-    switch (cmd) {
-        case 'reregistersession':
-            app.registerSession()
-            break
-
-        case 'screen':
-            if (app.screen == 'displayplayerresults') {
-                // set flag to disabled when we switch away from it
-                app.displayplayerresults.disabled = true
-            }
-            switch (arg) {
-                case 'entrance':
-                    app.entrance.disabled = false
-                    app.setPinFromURL()
-                    break
-                case 'answerquestion':
-                    if (app.answerquestion.disabled) {
-                        // we may have been disconnected - request for
-                        // display-choices
-                        app.sendCommand('query-display-choices')
-                    }
-                    break
-                case 'displayplayerresults':
-                    if (app.displayplayerresults.disabled) {
-                        // we may have been disconnected - request for results
-                        app.sendCommand('query-player-results')
-                    }
-                    break
-                case 'hostshowresults':
-                    // host may have been disconnected - request for question
-                    // results
-                    if (app.hostshowresults.disabled) {
-                        app.sendCommand('query-host-results')
-                    }
-                    break
-                case 'hostshowgameresults':
-                    app.hostshowgameresults.disabled = false
-                    break
-                case 'authenticateuser':
-                    app.authenticateuser.previousscreen = 'entrance'
-                    app.authenticateuser.username = ''
-                    app.authenticateuser.password = ''
-                    break
-            }
-            app.showScreen(arg)
-            break
-
-        case 'invalidcredentials':
-            app.showError('Invalid Credentials', app.screen)
-            break
-
-        case 'display-choices':
-            app.answerquestion.answercount = parseInt(arg)
-            app.answerquestion.disabled = false
-            break
-
-        case 'player-results':
-            try {
-                app.displayplayerresults.data = JSON.parse(arg)
-                app.displayplayerresults.disabled = false
-            } catch (err) {
-                console.log('err: ' + err)
-            }
-            break
-
-        case 'all-quizzes':
-            try {
-                app.hostselectquiz.quizzes = JSON.parse(arg)
-                app.hostselectquiz.disabled = false
-            } catch (err) {
-                console.log('err: ' + err)
-            }
-            break
-
-        case 'lobby-game-metadata':
-            try {
-                app.hostgamelobby.data = JSON.parse(arg)
-                let url = document.location.protocol + "//" + document.location.host + "?pin=" + app.hostgamelobby.data.pin
-                app.hostgamelobby.link = url
-                let qr = new QRious({
-                    element: document.getElementById('qr'),
-                    size: 300,
-                    value: url
-                })
-                app.updateHostGameLobbyText()
-            } catch (err) {
-                console.log('err: ' + err)
-            }
-            break
-
-        case 'participants-list':
-            try {
-                app.hostgamelobby.data.players = JSON.parse(arg)
-                app.updateHostGameLobbyText()
-            } catch (err) {
-                console.log('err: ' + err)
-            }
-            break
-
-        case 'hostshowquestion':
-            try {
-                app.hostshowquestion.data = JSON.parse(arg)
-
-                if (app.hostshowquestion && app.hostshowquestion.data && app.hostshowquestion.data.timeleft) {
-                    app.hostshowquestion.timer = setInterval(function() {
-                        if (app.hostshowquestion && app.hostshowquestion.data && app.hostshowquestion.data.timeleft > 0) {
-                            app.hostshowquestion.data.timeleft--
-
-                            if (app.hostshowquestion.data.timeleft == 0) {
-                                app.stopCountdown()
-                            }
-                        }
-                    }, 1000)
-                }
-            } catch (err) {
-                console.log('err: ' + err)
-            }
-            break
-
-        case 'players-answered':
-            try {
-                payload = JSON.parse(arg)
-                if (payload != null && payload.answered != null && payload.totalplayers != null && payload.votes != null) {
-                    app.hostshowquestion.data.answered = payload.answered
-                    app.hostshowquestion.data.totalplayers = payload.totalplayers
-                    app.hostshowquestion.data.votes = payload.votes
-                    app.hostshowquestion.data.totalvotes = payload.totalvotes
-
-                    if (payload.allanswered) {
-                        app.stopCountdown()
-                    }
-                }
-            } catch (err) {
-                console.log('err: ' + err)
-            }
-            break
-
-        case 'question-results':
-            try {
-                app.hostshowresults.data = JSON.parse(arg)
-                app.hostshowresults.disabled = false
-            } catch (err) {
-                console.log('err: ' + err)
-            }
-            break
-
-        case 'show-winners':
-            try {
-                app.hostshowgameresults.data = JSON.parse(arg)
-            } catch (err) {
-                console.log('err: ' + err)
-            }
-            break
-
-        case 'error':
-            try {
-                data = JSON.parse(arg)
-                app.showError(data.message, data.nextscreen)
-            } catch (err) {
-                console.log('err: ' + err)
-            }
-            break
-
-        default:
-            console.log('oops!')
-    }
-}
-
 
 var app = new Vue({
     el: '#app',
@@ -231,19 +48,21 @@ var app = new Vue({
             return
         }
         if (window["WebSocket"]) {
-            var that = this
-            that.conn = new WebSocket("ws://" + document.location.host + "/ws")
-            that.conn.onopen = function (evt) {
+            this.conn = new WebSocket("ws://" + document.location.host + "/ws")
+
+            let that = this
+
+            this.conn.onopen = function (evt) {
                 that.showScreen('entrance')
                 that.registerSession()
             }
-            that.conn.onclose = function (evt) {
+            this.conn.onclose = function (evt) {
                 that.showError('Connection closed')
             }
-            that.conn.onmessage = function (evt) {
+            this.conn.onmessage = function (evt) {
                 let messages = evt.data.split('\n')
                 for (var i=0; i<messages.length; i++) {
-                    processIncoming(that, messages[i])
+                    that.processIncoming(messages[i])
                 }
             }
         } else {
@@ -379,5 +198,190 @@ var app = new Vue({
             this.hostshowgameresults.disabled = true
             this.sendCommand('delete-game')
         },
+
+        processIncoming: function (s) {
+            let cmd, arg
+        
+            s = s.trim()
+            if (s.length == 0) return
+            let space = s.indexOf(' ')
+            if (space == -1) {
+                cmd = s
+                arg = ''
+            } else {
+                cmd = s.substring(0, space)
+                arg = s.substring(space+1).trim()
+            }
+        
+            console.log('cmd=' + cmd + ',arg=' + arg)
+            switch (cmd) {
+                case 'reregistersession':
+                    this.registerSession()
+                    break
+        
+                case 'screen':
+                    if (this.screen == 'displayplayerresults') {
+                        // set flag to disabled when we switch away from it
+                        this.displayplayerresults.disabled = true
+                    }
+                    switch (arg) {
+                        case 'entrance':
+                            this.entrance.disabled = false
+                            this.setPinFromURL()
+                            break
+                        case 'answerquestion':
+                            if (this.answerquestion.disabled) {
+                                // we may have been disconnected - request for
+                                // display-choices
+                                this.sendCommand('query-display-choices')
+                            }
+                            break
+                        case 'displayplayerresults':
+                            if (this.displayplayerresults.disabled) {
+                                // we may have been disconnected - request for results
+                                this.sendCommand('query-player-results')
+                            }
+                            break
+                        case 'hostshowresults':
+                            // host may have been disconnected - request for question
+                            // results
+                            if (this.hostshowresults.disabled) {
+                                this.sendCommand('query-host-results')
+                            }
+                            break
+                        case 'hostshowgameresults':
+                            this.hostshowgameresults.disabled = false
+                            break
+                        case 'authenticateuser':
+                            this.authenticateuser.previousscreen = 'entrance'
+                            this.authenticateuser.username = ''
+                            this.authenticateuser.password = ''
+                            break
+                    }
+                    this.showScreen(arg)
+                    break
+        
+                case 'invalidcredentials':
+                    this.showError('Invalid Credentials', this.screen)
+                    break
+        
+                case 'display-choices':
+                    this.answerquestion.answercount = parseInt(arg)
+                    this.answerquestion.disabled = false
+                    break
+        
+                case 'player-results':
+                    try {
+                        this.displayplayerresults.data = JSON.parse(arg)
+                        this.displayplayerresults.disabled = false
+                    } catch (err) {
+                        console.log('err: ' + err)
+                    }
+                    break
+        
+                case 'all-quizzes':
+                    try {
+                        this.hostselectquiz.quizzes = JSON.parse(arg)
+                        this.hostselectquiz.disabled = false
+                    } catch (err) {
+                        console.log('err: ' + err)
+                    }
+                    break
+        
+                case 'lobby-game-metadata':
+                    try {
+                        this.hostgamelobby.data = JSON.parse(arg)
+                        let url = document.location.protocol + "//" + document.location.host + "?pin=" + this.hostgamelobby.data.pin
+                        this.hostgamelobby.link = url
+                        let qr = new QRious({
+                            element: document.getElementById('qr'),
+                            size: 300,
+                            value: url
+                        })
+                        this.updateHostGameLobbyText()
+                    } catch (err) {
+                        console.log('err: ' + err)
+                    }
+                    break
+        
+                case 'participants-list':
+                    try {
+                        this.hostgamelobby.data.players = JSON.parse(arg)
+                        this.updateHostGameLobbyText()
+                    } catch (err) {
+                        console.log('err: ' + err)
+                    }
+                    break
+        
+                case 'hostshowquestion':
+                    try {
+                        this.hostshowquestion.data = JSON.parse(arg)
+        
+                        if (this.hostshowquestion && this.hostshowquestion.data && this.hostshowquestion.data.timeleft) {
+                            let that = this
+
+                            this.hostshowquestion.timer = setInterval(function() {
+                                if (that.hostshowquestion && that.hostshowquestion.data && that.hostshowquestion.data.timeleft > 0) {
+                                    that.hostshowquestion.data.timeleft--
+        
+                                    if (that.hostshowquestion.data.timeleft == 0) {
+                                        that.stopCountdown()
+                                    }
+                                }
+                            }, 1000)
+                        }
+                    } catch (err) {
+                        console.log('err: ' + err)
+                    }
+                    break
+        
+                case 'players-answered':
+                    try {
+                        payload = JSON.parse(arg)
+                        if (payload != null && payload.answered != null && payload.totalplayers != null && payload.votes != null) {
+                            this.hostshowquestion.data.answered = payload.answered
+                            this.hostshowquestion.data.totalplayers = payload.totalplayers
+                            this.hostshowquestion.data.votes = payload.votes
+                            this.hostshowquestion.data.totalvotes = payload.totalvotes
+        
+                            if (payload.allanswered) {
+                                this.stopCountdown()
+                            }
+                        }
+                    } catch (err) {
+                        console.log('err: ' + err)
+                    }
+                    break
+        
+                case 'question-results':
+                    try {
+                        this.hostshowresults.data = JSON.parse(arg)
+                        this.hostshowresults.disabled = false
+                    } catch (err) {
+                        console.log('err: ' + err)
+                    }
+                    break
+        
+                case 'show-winners':
+                    try {
+                        this.hostshowgameresults.data = JSON.parse(arg)
+                    } catch (err) {
+                        console.log('err: ' + err)
+                    }
+                    break
+        
+                case 'error':
+                    try {
+                        data = JSON.parse(arg)
+                        this.showError(data.message, data.nextscreen)
+                    } catch (err) {
+                        console.log('err: ' + err)
+                    }
+                    break
+        
+                default:
+                    console.log('oops!')
+            }
+        }
     }
 })
