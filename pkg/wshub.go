@@ -251,8 +251,8 @@ func (h *Hub) processMessage(m *ClientCommand) {
 		}
 		players := game.getPlayers()
 		players = append(players, game.Host)
-		h.removeGameFromSessions(players)
-		h.sendClientsToScreen(players, "entrance")
+		h.RemoveGameFromSessions(players)
+		h.SendClientsToScreen(players, "entrance")
 		h.games.Delete(game.Pin)
 
 	case "host-game":
@@ -338,8 +338,8 @@ func (h *Hub) processMessage(m *ClientCommand) {
 		m.client.screen("hostshowgameresults")
 
 		players := game.getPlayers()
-		h.removeGameFromSessions(players)
-		h.sendClientsToScreen(players, "entrance")
+		h.RemoveGameFromSessions(players)
+		h.SendClientsToScreen(players, "entrance")
 
 	case "delete-game":
 		game, err := h.ensureUserIsGameHost(m)
@@ -478,7 +478,7 @@ func (h *Hub) informGamePlayersOfResults(pin int) {
 	}
 }
 
-func (h *Hub) sendClientsToScreen(sessionids []string, screen string) {
+func (h *Hub) SendClientsToScreen(sessionids []string, screen string) {
 	for _, id := range sessionids {
 		client := h.sessions.GetClientForSession(id)
 		if client == nil {
@@ -488,7 +488,7 @@ func (h *Hub) sendClientsToScreen(sessionids []string, screen string) {
 	}
 }
 
-func (h *Hub) removeGameFromSessions(sessionids []string) {
+func (h *Hub) RemoveGameFromSessions(sessionids []string) {
 	for _, id := range sessionids {
 		h.sessions.DeregisterGameFromSession(id)
 	}

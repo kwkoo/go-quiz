@@ -3,7 +3,7 @@ var app = new Vue({
 
     data: {
         screen: 'start',
-        list: { quizzes: null },
+        list: { quizzes: null, games: null, sessions: null },
         message: { text: '', next: ''},
         quiz: {
             name: '',
@@ -19,7 +19,7 @@ var app = new Vue({
     },
 
     mounted: function() {
-        this.loadQuizzes()
+        this.showScreen('start')
     },
 
     methods: {
@@ -27,6 +27,8 @@ var app = new Vue({
         showScreen: function(screen) {
             if (screen == 'start') {
                 this.loadQuizzes()
+                this.loadGames()
+                this.loadSessions()
             }
             this.screen = screen
         },
@@ -47,15 +49,98 @@ var app = new Vue({
             xhr.send()
         },
 
+        loadGames: function() {
+            let xhr = new XMLHttpRequest()
+            let that = this
+            xhr.onreadystatechange = function() {
+                if (this.readyState == 4) {
+                    try {
+                        that.list.games = JSON.parse(xhr.responseText)
+                    } catch (err) {
+                        that.showMessage(err, '')
+                    }
+                }
+            }
+            xhr.open('GET', '/api/game', true)
+            xhr.send()
+        },
+
+        loadSessions: function() {
+            let xhr = new XMLHttpRequest()
+            let that = this
+            xhr.onreadystatechange = function() {
+                if (this.readyState == 4) {
+                    try {
+                        that.list.sessions = JSON.parse(xhr.responseText)
+                    } catch (err) {
+                        that.showMessage(err, '')
+                    }
+                }
+            }
+            xhr.open('GET', '/api/session', true)
+            xhr.send()
+        },
+
         deleteQuiz: function(id) {
             let xhr = new XMLHttpRequest()
             let that = this
             xhr.onreadystatechange = function() {
                 if (this.readyState == 4) {
-                    that.loadQuizzes()
+                    try {
+                        let resp = JSON.parse(xhr.responseText)
+                        if (resp.success) {
+                            that.showMessage('Quiz successfully deleted', 'start')
+                            return
+                        }
+                        that.showMessage(resp.error, 'start')
+                    } catch (err) {
+                        that.showMessage(err, 'start')
+                    }
                 }
             }
             xhr.open('DELETE', '/api/quiz/' + id)
+            xhr.send()
+        },
+
+        deleteGame: function(pin) {
+            let xhr = new XMLHttpRequest()
+            let that = this
+            xhr.onreadystatechange = function() {
+                if (this.readyState == 4) {
+                    try {
+                        let resp = JSON.parse(xhr.responseText)
+                        if (resp.success) {
+                            that.showMessage('Game successfully deleted', 'start')
+                            return
+                        }
+                        that.showMessage(resp.error, 'start')
+                    } catch (err) {
+                        that.showMessage(err, 'start')
+                    }
+                }
+            }
+            xhr.open('DELETE', '/api/game/' + pin)
+            xhr.send()
+        },
+
+        deleteSession: function(id) {
+            let xhr = new XMLHttpRequest()
+            let that = this
+            xhr.onreadystatechange = function() {
+                if (this.readyState == 4) {
+                    try {
+                        let resp = JSON.parse(xhr.responseText)
+                        if (resp.success) {
+                            that.showMessage('Session successfully deleted', 'start')
+                            return
+                        }
+                        that.showMessage(resp.error, 'start')
+                    } catch (err) {
+                        that.showMessage(err, 'start')
+                    }
+                }
+            }
+            xhr.open('DELETE', '/api/session/' + id)
             xhr.send()
         },
 
@@ -153,7 +238,7 @@ var app = new Vue({
         showMessage: function(message, next) {
             this.message.text = message
             this.message.next = next
-            this.screen = 'message'
+            this.showScreen('message')
         },
 
         dismissMessage: function() {

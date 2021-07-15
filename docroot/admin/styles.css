@@ -66,3 +66,18 @@
 .spaced {
     margin: 10px;
 }
+
+.box {
+    background-color: #E0E0E0;
+    text-align: center;
+    padding: 10px;
+}
+
+table, td, th {
+    border: 1px solid black;
+}
+
+table {
+    border-collapse: collapse;
+    width: 100%;
+}

@@ -3,6 +3,7 @@
 
 <head>
   <title>Quiz Admin</title>
+  <link rel="icon" href="/images/favicon.svg" sizes="any" type="image/svg+xml">
   <link href="https://fonts.googleapis.com/css?family=Raleway" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <script src="https://unpkg.com/vue"></script>
@@ -14,15 +15,57 @@
     <!-- list quizzes screen -->
     <div v-show="screen === 'start'">
       <h1 class="title">Quiz Admin</h1>
-      <div v-show="list.quizzes == null" class="center"><img src="ajax-loader.gif"></div>
-      <div v-show="list.quizzes != null" v-for="(quiz, index) in list.quizzes" class="center">
-        <div class="spaced">
-          <button class="subtitle" v-on:click="editQuiz(index)">{{ quiz.name }}</button>
-          <button v-on:click="deleteQuiz(quiz.id)">&#10060;</button>
+
+      <div v-show="list.quizzes == null" class="center"><img src="/images/ajax-loader.gif"></div>
+      <div v-show="list.quizzes != null" class="box">
+        <h2 class="subtitle">All Quizzes</h2>
+        <div v-show="list.quizzes != null" v-for="(quiz, index) in list.quizzes" class="center">
+          <div class="spaced">
+            <button class="subtitle" v-on:click="editQuiz(index)">{{ quiz.name }}</button>
+            <button v-on:click="deleteQuiz(quiz.id)">&#10060;</button>
+          </div>
         </div>
+        <br><br>
+        <button class="button" v-on:click="newQuiz()">New Quiz</button>
       </div>
       <br><br>
-      <button class="button" v-on:click="newQuiz()">New Quiz</button>
+
+      <div v-show="list.games == null" class="center"><img src="/images/ajax-loader.gif"></div>
+      <div v-show="list.games != null" class="box">
+        <h2 class="subtitle">All Games</h2>
+        <table v-show="list.games != null">
+          <tr><th>Pin</th><th>Quiz Name</th><th>Number of Players</th><th>Delete</th></tr>
+          <template v-for="(game, index) in list.games" class="center">
+            <tr>
+              <td>{{ game.pin }}</td>
+              <td>{{ game.quiz.name }}</td>
+              <td>{{ Object.keys(game.players).length }}</td>
+              <td><button v-on:click="deleteGame(game.pin)">&#10060;</button></td>
+            </tr>
+          </template>
+        </table>
+      </div>
+      <br><br>
+
+      <div v-show="list.sessions == null" class="center"><img src="/images/ajax-loader.gif"></div>
+      <div v-show="list.sessions != null" class="box">
+        <h2 class="subtitle">All Sessions</h2>
+        <table v-show="list.sessions != null">
+          <tr><th>ID</th><th>Client Connected</th><th>Screen</th><th>Game Pin</th><th>Name</th><th>Admin</th><th>Delete</th></tr>
+          <template v-for="(session, index) in list.sessions" class="center">
+            <tr>
+              <td>{{ session.id }}</td>
+              <td>{{ session.client == null?'no':'yes' }}</td>
+              <td>{{ session.screen }}</td>
+              <td>{{ session.gamepin }}</td>
+              <td>{{ session.name }}</td>
+              <td>{{ session.admin?'yes':'no' }}</td>
+              <td><button v-on:click="deleteSession(session.id)">&#10060;</button></td>
+            </tr>
+          </template>
+        </table>
+      </div>
+
     </div>
 
     <!-- quiz creator screen -->

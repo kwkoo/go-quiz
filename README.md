@@ -1,6 +1,6 @@
 # Go Quiz App
 
-A Kahoot clone.
+A Kahoot clone with a UI based on [Ethan Brimhall's kahoot-clone-nodejs](https://github.com/ethanbrimhall/kahoot-clone-nodejs).
 
 ## Resources
 
@@ -11,7 +11,7 @@ A Kahoot clone.
 
 ## To-Do
 
-* admin API to manipulate game state
+* admin API to manipulate game state (patch game)
 
 
 ## Quiz Host Messages

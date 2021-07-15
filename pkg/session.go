@@ -48,6 +48,8 @@ func (s *Session) copy() Session {
 		Screen:  s.Screen,
 		Gamepin: s.Gamepin,
 		Name:    s.Name,
+		Admin:   s.Admin,
+		expiry:  s.expiry,
 	}
 }
 

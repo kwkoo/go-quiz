@@ -187,14 +187,14 @@ func (api *RestApi) Game(w http.ResponseWriter, r *http.Request) {
 			streamResponse(w, false, "invalid game id")
 			return
 		}
-		id, err := strconv.Atoi(last)
+		pin, err := strconv.Atoi(last)
 		if err != nil {
 			streamResponse(w, false, fmt.Sprintf("invalid game id %s: %v", last, err))
 			return
 		}
-		game, err := api.hub.games.Get(id)
+		game, err := api.hub.games.Get(pin)
 		if err != nil {
-			streamResponse(w, false, fmt.Sprintf("error getting game %d: %v", id, err))
+			streamResponse(w, false, fmt.Sprintf("error getting game %d: %v", pin, err))
 			return
 		}
 		enc := json.NewEncoder(w)
@@ -211,12 +211,24 @@ func (api *RestApi) Game(w http.ResponseWriter, r *http.Request) {
 			streamResponse(w, false, "invalid game id")
 			return
 		}
-		id, err := strconv.Atoi(last)
+		pin, err := strconv.Atoi(last)
 		if err != nil {
 			streamResponse(w, false, fmt.Sprintf("invalid game id %s: %v", last, err))
 			return
 		}
-		api.hub.games.Delete(id)
+
+		game, err := api.hub.games.Get(pin)
+		if err != nil {
+			streamResponse(w, false, fmt.Sprintf("could not get game with pin %d: %v", pin, err))
+			return
+		}
+
+		// remove players and host from game
+		players := append(game.getPlayers(), game.Host)
+		api.hub.RemoveGameFromSessions(players)
+		api.hub.SendClientsToScreen(players, "entrance")
+
+		api.hub.games.Delete(pin)
 		streamResponse(w, true, "")
 		return
 	}
