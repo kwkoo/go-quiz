@@ -34,114 +34,84 @@ var app = new Vue({
         },
 
         loadQuizzes: function() {
-            let xhr = new XMLHttpRequest()
             let that = this
-            xhr.onreadystatechange = function() {
-                if (this.readyState == 4) {
-                    try {
-                        that.list.quizzes = JSON.parse(xhr.responseText)
-                    } catch (err) {
-                        that.showMessage(err, '')
-                    }
+            this.webRequest('GET', '/api/quiz', null, function(resp) {
+                try {
+                    that.list.quizzes = JSON.parse(resp)
+                } catch (err) {
+                    that.showMessage(err, '')
                 }
-            }
-            xhr.open('GET', '/api/quiz', true)
-            xhr.send()
+            })
         },
 
         loadGames: function() {
-            let xhr = new XMLHttpRequest()
             let that = this
-            xhr.onreadystatechange = function() {
-                if (this.readyState == 4) {
-                    try {
-                        that.list.games = JSON.parse(xhr.responseText)
-                    } catch (err) {
-                        that.showMessage(err, '')
-                    }
+            this.webRequest('GET', '/api/game', null, function(resp) {
+                try {
+                    that.list.games = JSON.parse(resp)
+                } catch (err) {
+                    that.showMessage(err, '')
                 }
-            }
-            xhr.open('GET', '/api/game', true)
-            xhr.send()
+            })
         },
 
         loadSessions: function() {
-            let xhr = new XMLHttpRequest()
             let that = this
-            xhr.onreadystatechange = function() {
-                if (this.readyState == 4) {
-                    try {
-                        that.list.sessions = JSON.parse(xhr.responseText)
-                    } catch (err) {
-                        that.showMessage(err, '')
-                    }
+            this.webRequest('GET', '/api/session', null, function(resp) {
+                try {
+                    that.list.sessions = JSON.parse(resp)
+                } catch (err) {
+                    that.showMessage(err, '')
                 }
-            }
-            xhr.open('GET', '/api/session', true)
-            xhr.send()
+            })
         },
 
         deleteQuiz: function(id) {
-            let xhr = new XMLHttpRequest()
             let that = this
-            xhr.onreadystatechange = function() {
-                if (this.readyState == 4) {
-                    try {
-                        let resp = JSON.parse(xhr.responseText)
-                        if (resp.success) {
-                            that.showMessage('Quiz successfully deleted', 'start')
-                            return
-                        }
-                        that.showMessage(resp.error, 'start')
-                    } catch (err) {
-                        that.showMessage(err, 'start')
+            this.webRequest('DELETE', '/api/quiz/' + id, null, function(resp) {
+                try {
+                    let data = JSON.parse(resp)
+                    if (data.success) {
+                        that.showMessage('Quiz successfully deleted', 'start')
+                        return
                     }
+                    that.showMessage(data.error, 'start')
+                } catch (err) {
+                    that.showMessage(err, 'start')
                 }
-            }
-            xhr.open('DELETE', '/api/quiz/' + id)
-            xhr.send()
+            })
         },
 
         deleteGame: function(pin) {
-            let xhr = new XMLHttpRequest()
             let that = this
-            xhr.onreadystatechange = function() {
-                if (this.readyState == 4) {
-                    try {
-                        let resp = JSON.parse(xhr.responseText)
-                        if (resp.success) {
-                            that.showMessage('Game successfully deleted', 'start')
-                            return
-                        }
-                        that.showMessage(resp.error, 'start')
-                    } catch (err) {
-                        that.showMessage(err, 'start')
+            this.webRequest('DELETE', '/api/game/' + pin, null, function(resp) {
+                try {
+                    let data = JSON.parse(resp)
+                    if (data.success) {
+                        that.showMessage('Game successfully deleted', 'start')
+                        return
                     }
+                    that.showMessage(data.error, 'start')
+                } catch (err) {
+                    that.showMessage(err, 'start')
                 }
-            }
-            xhr.open('DELETE', '/api/game/' + pin)
-            xhr.send()
+            })
         },
 
         deleteSession: function(id) {
-            let xhr = new XMLHttpRequest()
             let that = this
-            xhr.onreadystatechange = function() {
-                if (this.readyState == 4) {
-                    try {
-                        let resp = JSON.parse(xhr.responseText)
-                        if (resp.success) {
-                            that.showMessage('Session successfully deleted', 'start')
-                            return
-                        }
-                        that.showMessage(resp.error, 'start')
-                    } catch (err) {
-                        that.showMessage(err, 'start')
+            this.webRequest('DELETE', '/api/session/' + id, null, function(resp) {
+                try {
+                    let data = JSON.parse(resp)
+                    if (data.success) {
+                        that.showMessage('Session successfully deleted', 'start')
+                        return
                     }
+                    that.showMessage(data.error, 'start')
+                } catch (err) {
+                    that.showMessage(err, 'start')
                 }
-            }
-            xhr.open('DELETE', '/api/session/' + id)
-            xhr.send()
+            })
         },
 
         newQuiz: function() {
@@ -184,7 +154,7 @@ var app = new Vue({
             this.quiz.questions.splice(index, 1)
         },
 
-        updateDatabase: function() {
+        updateQuiz: function() {
             if (this.quiz.name == '') {
                 this.showMessage('Please fill in the quiz title', 'creator')
                 return
@@ -207,28 +177,22 @@ var app = new Vue({
                 return
             }
 
-            let xhr = new XMLHttpRequest()
             let that = this
-            xhr.onreadystatechange = function() {
-                if (this.readyState == 4) {
-                    try {
-                        let data = JSON.parse(xhr.responseText)
-                        if (data.success) {
-                            that.showMessage('Quiz added', 'start')
-                            console.log('success')
-                        } else {
-                            console.log('error')
-                            that.showMessage(data.error, '')
-                        }
-                    } catch (err) {
-                        console.log('exception')
-                        that.showMessage(err, '')
+            this.webRequest('PUT', '/api/quiz', copy, function(resp) {
+                try {
+                    let data = JSON.parse(resp)
+                    if (data.success) {
+                        that.showMessage('Quiz added', 'start')
+                        console.log('success')
+                    } else {
+                        console.log('error')
+                        that.showMessage(data.error, '')
                     }
+                } catch (err) {
+                    console.log('exception')
+                    that.showMessage(err, '')
                 }
-            }
-            xhr.open('PUT', '/api/quiz')
-            xhr.setRequestHeader('Content-Type', 'application/json;charset=UTF-8')
-            xhr.send(JSON.stringify(copy))
+            })
         },
 
         cancelQuiz: function() {
@@ -247,6 +211,23 @@ var app = new Vue({
                 this.message.next = ''
             }
             this.message.text = ''
+        },
+
+        webRequest: function(method, url, body, callback) {
+            let xhr = new XMLHttpRequest()
+            let that = this
+            xhr.onreadystatechange = function() {
+                if (this.readyState == 4) {
+                    callback(xhr.responseText)
+                }
+            }
+            xhr.open(method, url)
+            if (body == null) {
+                xhr.send()
+            } else {
+                xhr.setRequestHeader('Content-Type', 'application/json;charset=UTF-8')
+                xhr.send(JSON.stringify(body))
+            }
         },
     }
 })
