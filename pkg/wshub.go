@@ -348,6 +348,7 @@ func (h *Hub) processMessage(m *ClientCommand) {
 			return
 		}
 		h.games.Delete(game.Pin)
+		h.sessions.SetSessionGamePin(m.client.sessionid, -1)
 		m.client.screen("hostselectquiz")
 
 	default:
@@ -389,6 +390,16 @@ func (h *Hub) sendQuestionResultsToHost(m *ClientCommand) (int, error) {
 	if err != nil {
 		return -1, fmt.Errorf("error getting question results: %v", err)
 	}
+
+	// this is an ugly hack - go through the top scorers and replace the
+	// session IDs with names
+	for i, ps := range results.TopScorers {
+		name := h.sessions.GetNameForSession(ps.Id)
+		if name != "" {
+			results.TopScorers[i].Id = name
+		}
+	}
+
 	encoded, err := convertToJSON(&results)
 	if err != nil {
 		return -1, fmt.Errorf("error converting question results payload to JSON: %v", err)

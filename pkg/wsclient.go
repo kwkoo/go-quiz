@@ -268,7 +268,7 @@ func (c *Client) screen(s string) {
 		}
 		fl := []FriendlyScore{}
 		for _, w := range winners {
-			session := c.hub.sessions.GetSession(w.Sessionid)
+			session := c.hub.sessions.GetSession(w.Id)
 			if session == nil {
 				// player session doesn't exist anymore
 				continue

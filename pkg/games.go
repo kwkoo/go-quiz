@@ -75,19 +75,20 @@ type AnswersUpdate struct {
 }
 
 type QuestionResults struct {
-	QuestionIndex  int      `json:"questionindex"`
-	Question       string   `json:"question"`
-	Answers        []string `json:"answers"`
-	Correct        int      `json:"correct"`
-	Votes          []int    `json:"votes"`
-	TotalVotes     int      `json:"totalvotes"`
-	TotalQuestions int      `json:"totalquestions"`
-	TotalPlayers   int      `json:"totalplayers"`
+	QuestionIndex  int           `json:"questionindex"`
+	Question       string        `json:"question"`
+	Answers        []string      `json:"answers"`
+	Correct        int           `json:"correct"`
+	Votes          []int         `json:"votes"`
+	TotalVotes     int           `json:"totalvotes"`
+	TotalQuestions int           `json:"totalquestions"`
+	TotalPlayers   int           `json:"totalplayers"`
+	TopScorers     []PlayerScore `json:"topscorers"`
 }
 
 type PlayerScore struct {
-	Sessionid string
-	Score     int
+	Id    string `json:"id"` // this is set to the session ID in games, but can be replaced with the player name somewhere else
+	Score int    `json:"score"`
 }
 
 type PlayerScoreList []PlayerScore
@@ -358,12 +359,13 @@ func (g *Game) getQuestionResults() (QuestionResults, error) {
 		TotalVotes:     g.totalVotes(),
 		TotalQuestions: g.Quiz.NumQuestions(),
 		TotalPlayers:   len(g.Players),
+		TopScorers:     g.getWinners(),
 	}
 
 	return results, nil
 }
 
-func (g *Game) getWinners() ([]PlayerScore, error) {
+func (g *Game) getWinners() []PlayerScore {
 	// copied from https://stackoverflow.com/a/18695740
 	pl := make(PlayerScoreList, len(g.Players))
 	i := 0
@@ -377,7 +379,7 @@ func (g *Game) getWinners() ([]PlayerScore, error) {
 	if max > winnerCount {
 		max = winnerCount
 	}
-	return pl[:max], nil
+	return pl[:max]
 }
 
 func (g *Game) getGameState() int {
@@ -690,6 +692,8 @@ func (g *Games) GetQuestionResults(pin int) (QuestionResults, error) {
 		return QuestionResults{}, fmt.Errorf("game with pin %d does not exist", pin)
 	}
 
+	g.mutex.RLock()
+	defer g.mutex.RUnlock()
 	return game.getQuestionResults()
 }
 
@@ -699,7 +703,9 @@ func (g *Games) GetWinners(pin int) ([]PlayerScore, error) {
 		return []PlayerScore{}, fmt.Errorf("game with pin %d does not exist", pin)
 	}
 
-	return game.getWinners()
+	g.mutex.RLock()
+	defer g.mutex.RUnlock()
+	return game.getWinners(), nil
 }
 
 func (g *Games) GetGameState(pin int) (int, error) {

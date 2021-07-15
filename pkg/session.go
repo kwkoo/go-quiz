@@ -183,6 +183,16 @@ func (s *Sessions) GetGamePinForSession(id string) int {
 	return session.Gamepin
 }
 
+func (s *Sessions) GetNameForSession(id string) string {
+	session := s.GetSession(id)
+
+	if session == nil {
+		return ""
+	}
+
+	return session.Name
+}
+
 func (s *Sessions) UpdateScreenForSession(id, newscreen string) {
 	session := s.GetSession(id)
 
@@ -274,7 +284,7 @@ func (s *Sessions) DeregisterGameFromSession(id string) {
 	}
 
 	s.mutex.Lock()
-	session.Gamepin = 0
+	session.Gamepin = -1
 	session.Screen = "entrance"
 	s.mutex.Unlock()
 	s.persist(session)

@@ -137,11 +137,19 @@
     <div v-show="screen === 'hostshowresults'">
       <h4 class="questionheader">Question {{ hostshowresults.data.questionindex + 1 }} / {{ hostshowresults.data.totalquestions }}</h4>
 
-      <div class="blockscontainer">
-        <!--
-          calculate the height based on totalplayers and not totalvotes to get a sense of voting progress
-        -->
-        <div v-for="(vote, index) in hostshowresults.data.votes" class="square" v-bind:class="{option0: index==0, option1: index==1, option2: index==2, option3: index==3}" v-bind:style="{ height: (vote * 100 / hostshowresults.data.totalplayers) + 'px' }"></div>
+      <div class="columns">
+        <div class="blockscontainer">
+          <!--
+            calculate the height based on totalplayers and not totalvotes to get a sense of voting progress
+          -->
+          <div v-for="(vote, index) in hostshowresults.data.votes" class="square" v-bind:class="{option0: index==0, option1: index==1, option2: index==2, option3: index==3}" v-bind:style="{ height: (vote * 100 / hostshowresults.data.totalplayers) + 'px' }"></div>
+        </div>
+        <div>
+          <h3 class="questionsubheader">Top Scorers</h3>
+          <template v-for="player in hostshowresults.data.topscorers">
+            <div class="questionsubheader">{{ player.id }} - {{ player.score }}</div>
+          </template>
+        </div>
       </div>
 
       <h2 class="questionsubheader">{{ hostshowresults.data.question }}</h2>

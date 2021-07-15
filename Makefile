@@ -6,10 +6,11 @@ COVERAGEHTML=coverage.html
 IMAGENAME="kwkoo/$(PACKAGE)"
 VERSION="0.1"
 ADMINPASSWORD="password"
+SESSIONTIMEOUT=300
 
 .PHONY: run build clean test coverage image runcontainer redis importquizzes
 run:
-	@ADMINPASSWORD="$(ADMINPASSWORD)" SESSIONTIMEOUT=30 go run main.go -docroot $(BASE)/docroot
+	@ADMINPASSWORD="$(ADMINPASSWORD)" SESSIONTIMEOUT=$(SESSIONTIMEOUT) go run main.go -docroot $(BASE)/docroot
 
 build:
 	@echo "Building..."

@@ -206,7 +206,7 @@ var app = new Vue({
 
         hostselectquiz: { quizzes: [], disabled: true },
         hostgamelobby: { data: { pin: 0, players: [] }, textarea: '', link: '', disabled: true },
-        hostshowquestion: { data: { questionindex: 0, timeleft: 0, answered: 0, totalplayers:0, question: '', answers: [], votes: [], totalvotes: 0, totalquestions: 0 }, timer: null },
+        hostshowquestion: { data: { questionindex: 0, timeleft: 0, answered: 0, totalplayers:0, question: '', answers: [], votes: [], totalvotes: 0, totalquestions: 0, topscorers: [] }, timer: null },
         hostshowresults: { data: { questionindex: 0, question: '', answers: [], correct: 0, votes: [], totalvotes: 0, totalquestions: 0 }, disabled: true },
         hostshowgameresults: { data: [], disabled: true },
         error: { message: '', next: '', disabled: true },
