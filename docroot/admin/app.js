@@ -16,6 +16,7 @@ var app = new Vue({
                 }
             ]
         },
+        editgame: { pin: 0, questionindex:0, gamestate: 0 },
     },
 
     mounted: function() {
@@ -162,7 +163,7 @@ var app = new Vue({
 
             // remove empty answers
             let errors = []
-            copy = JSON.parse(JSON.stringify(this.quiz))
+            let copy = JSON.parse(JSON.stringify(this.quiz))
             copy.questions.forEach(function (question, index) {
                 while (question.answers.length > 0 && question.answers[question.answers.length-1] == '') {
                     question.answers.splice(-1, 1)
@@ -183,13 +184,10 @@ var app = new Vue({
                     let data = JSON.parse(resp)
                     if (data.success) {
                         that.showMessage('Quiz added', 'start')
-                        console.log('success')
                     } else {
-                        console.log('error')
                         that.showMessage(data.error, '')
                     }
                 } catch (err) {
-                    console.log('exception')
                     that.showMessage(err, '')
                 }
             })
@@ -197,6 +195,27 @@ var app = new Vue({
 
         cancelQuiz: function() {
             this.showScreen('start')
+        },
+
+        editGame: function(index) {
+            this.editgame = JSON.parse(JSON.stringify(this.list.games[index]))
+            this.showScreen('editgame')
+        },
+
+        updateGame: function() {
+            let that = this
+            this.webRequest('PUT', '/api/game', this.editgame, function(resp) {
+                try {
+                    let data = JSON.parse(resp)
+                    if (data.success) {
+                        that.showMessage('Updated game', 'start')
+                    } else {
+                        that.showMessage(data.error, 'start')
+                    }
+                } catch (err) {
+                    that.showMessage(err, 'start')
+                }
+            })
         },
 
         showMessage: function(message, next) {

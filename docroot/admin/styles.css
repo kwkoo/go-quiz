@@ -77,6 +77,15 @@ table, td, th {
     border: 1px solid black;
 }
 
+td {
+    font-family: 'Raleway', sans-serif;
+}
+
+th {
+    font-family: 'Raleway', sans-serif;
+    font-weight: bold;
+}
+
 table {
     border-collapse: collapse;
     width: 100%;

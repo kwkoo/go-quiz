@@ -9,11 +9,6 @@ A Kahoot clone with a UI based on [Ethan Brimhall's kahoot-clone-nodejs](https:/
 * [redigo example code](https://github.com/pete911/examples-redigo)
 
 
-## To-Do
-
-* admin API to manipulate game state (patch game)
-
-
 ## Quiz Host Messages
 
 * *host starts in connecting to server screen*

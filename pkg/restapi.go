@@ -233,6 +233,22 @@ func (api *RestApi) Game(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.Method == http.MethodPut {
+		defer r.Body.Close()
+		dec := json.NewDecoder(r.Body)
+		var game Game
+		if err := dec.Decode(&game); err != nil {
+			streamResponse(w, false, fmt.Sprintf("error decoding game JSON: %v", err))
+			return
+		}
+		if err := api.hub.games.Update(game); err != nil {
+			streamResponse(w, false, fmt.Sprintf("error updating game: %v", err))
+			return
+		}
+		streamResponse(w, true, "")
+		return
+	}
+
 	http.Error(w, "unsupported method", http.StatusNotImplemented)
 }
 

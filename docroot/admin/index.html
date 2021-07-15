@@ -34,12 +34,14 @@
       <div v-show="list.games != null" class="box">
         <h2 class="subtitle">All Games</h2>
         <table v-show="list.games != null">
-          <tr><th>Pin</th><th>Quiz Name</th><th>Number of Players</th><th>Delete</th></tr>
+          <tr><th style="font-weight: bold;">Pin</th><th>Quiz Name</th><th>Number of Players</th><th>Question Index</th><th>Game State</th><th>Delete</th></tr>
           <template v-for="(game, index) in list.games" class="center">
             <tr>
-              <td>{{ game.pin }}</td>
+              <td><button class="subtitle" v-on:click="editGame(index)">{{ game.pin }}</button></td>
               <td>{{ game.quiz.name }}</td>
               <td>{{ Object.keys(game.players).length }}</td>
+              <td>{{ game.questionindex }}</td>
+              <td>{{ game.gamestate }}</td>
               <td><button v-on:click="deleteGame(game.pin)">&#10060;</button></td>
             </tr>
           </template>
@@ -113,6 +115,29 @@
       </div>
       <br>
       <button v-on:click="cancelQuiz">Cancel</button>
+    </div>
+
+    <!-- edit game screen -->
+    <div v-show="screen === 'editgame'">
+      <h1 class="title">Edit Game</h1>
+      <div>
+        <table>
+          <tr>
+            <td class="question">Game Pin</td>
+            <td class="question">{{ editgame.pin }}</td>
+          </tr>
+          <tr>
+            <td class="question">Question Index</td>
+            <td class="question"><input v-model.number="editgame.questionindex" class="question"></td>
+          </tr>
+          <tr>
+            <td class="question">Game State</td>
+            <td class="question"><input v-model.number="editgame.gamestate" class="question"></td>
+          </tr>
+        </table>
+        <br>
+        <button v-on:click="updateGame">Update Game</button>
+      </div>
     </div>
 
     <!-- message screen -->
