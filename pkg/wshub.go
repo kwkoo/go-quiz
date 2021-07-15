@@ -6,6 +6,7 @@
 package pkg
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -84,11 +85,12 @@ func (h *Hub) Run() {
 
 func (h *Hub) processMessage(m *ClientCommand) {
 	log.Printf("cmd=%s,arg=%s", m.cmd, m.arg)
-	// client hasn't identified themselves yet
+
 	if len(m.client.sessionid) == 0 {
+		// client hasn't identified themselves yet
 		if m.cmd == "session" {
 			if len(m.arg) == 0 || len(m.arg) > 64 {
-				m.client.errorMessage("invalid session ID", "entrance")
+				errorMessageToClient(m.client, "invalid session ID", "entrance")
 				return
 			}
 			m.client.sessionid = m.arg
@@ -98,15 +100,15 @@ func (h *Hub) processMessage(m *ClientCommand) {
 			} else {
 				if session.Client != nil {
 					m.client.sessionid = ""
-					m.client.errorMessage("you have another active session - disconnect that session before reconnecting", "")
+					errorMessageToClient(m.client, "you have another active session - disconnect that session before reconnecting", "")
 					return
 				}
 				h.sessions.UpdateClientForSession(m.client.sessionid, m.client)
 			}
-			m.client.screen(session.Screen)
+			h.sendClientToScreen(m.client, session.Screen)
 			return
 		}
-		m.client.sendMessage("reregistersession")
+		sendMessageToClient(m.client, "reregistersession")
 		return
 	}
 
@@ -114,12 +116,12 @@ func (h *Hub) processMessage(m *ClientCommand) {
 
 	case "adminlogin":
 		if h.sessions.AuthenticateAdmin(m.client.sessionid, m.arg) {
-			m.client.screen("hostselectquiz")
+			h.sendClientToScreen(m.client, "hostselectquiz")
 			return
 		}
 
 		// invalid credentials
-		m.client.sendMessage("invalidcredentials")
+		sendMessageToClient(m.client, "invalidcredentials")
 		return
 
 	case "join-game":
@@ -129,19 +131,19 @@ func (h *Hub) processMessage(m *ClientCommand) {
 		}{}
 		dec := json.NewDecoder(strings.NewReader(m.arg))
 		if err := dec.Decode(&pinfo); err != nil {
-			m.client.errorMessage("could not decode json: "+err.Error(), "entrance")
+			errorMessageToClient(m.client, "could not decode json: "+err.Error(), "entrance")
 			return
 		}
 		if len(pinfo.Name) == 0 {
-			m.client.errorMessage("name is missing", "entrance")
+			errorMessageToClient(m.client, "name is missing", "entrance")
 			return
 		}
 		if err := h.games.AddPlayerToGame(m.client.sessionid, pinfo.Pin); err != nil {
-			m.client.errorMessage("could not add player to game: "+err.Error(), "entrance")
+			errorMessageToClient(m.client, "could not add player to game: "+err.Error(), "entrance")
 			return
 		}
 		h.sessions.RegisterSessionInGame(m.client.sessionid, pinfo.Name, pinfo.Pin)
-		m.client.screen("waitforgamestart")
+		h.sendClientToScreen(m.client, "waitforgamestart")
 
 		// inform game host of new player
 		playerids := h.games.GetPlayersForGame(pinfo.Pin)
@@ -159,16 +161,16 @@ func (h *Hub) processMessage(m *ClientCommand) {
 		pin := h.sessions.GetGamePinForSession(m.client.sessionid)
 		if pin < 0 {
 			h.sessions.SetSessionScreen(m.client.sessionid, "entrance")
-			m.client.errorMessage("could not get game pin for this session", "entrance")
+			errorMessageToClient(m.client, "could not get game pin for this session", "entrance")
 			return
 		}
 		currentQuestion, err := h.games.GetCurrentQuestion(pin)
 		if err != nil {
 			// todo: this should actually set the player screen so they won't be stuck here
-			m.client.errorMessage("error retrieving current question: "+err.Error(), "")
+			errorMessageToClient(m.client, "error retrieving current question: "+err.Error(), "")
 			return
 		}
-		m.client.sendMessage(fmt.Sprintf("display-choices %d", len(currentQuestion.Answers)))
+		sendMessageToClient(m.client, fmt.Sprintf("display-choices %d", len(currentQuestion.Answers)))
 
 	case "query-player-results":
 		// player may have been disconnected - now they need to know about
@@ -176,7 +178,7 @@ func (h *Hub) processMessage(m *ClientCommand) {
 		pin := h.sessions.GetGamePinForSession(m.client.sessionid)
 		if pin < 0 {
 			h.sessions.SetSessionScreen(m.client.sessionid, "entrance")
-			m.client.errorMessage("could not get game pin for this session", "entrance")
+			errorMessageToClient(m.client, "could not get game pin for this session", "entrance")
 			return
 		}
 
@@ -184,7 +186,7 @@ func (h *Hub) processMessage(m *ClientCommand) {
 		if err != nil {
 			h.sessions.SetSessionGamePin(m.client.sessionid, -1)
 			h.sessions.SetSessionScreen(m.client.sessionid, "entrance")
-			m.client.errorMessage("error fetching game: "+err.Error(), "entrance")
+			errorMessageToClient(m.client, "error fetching game: "+err.Error(), "entrance")
 			return
 		}
 
@@ -193,7 +195,7 @@ func (h *Hub) processMessage(m *ClientCommand) {
 		if !ok {
 			h.sessions.SetSessionGamePin(m.client.sessionid, -1)
 			h.sessions.SetSessionScreen(m.client.sessionid, "entrance")
-			m.client.errorMessage("you do not have a score in this game", "entrance")
+			errorMessageToClient(m.client, "you do not have a score in this game", "entrance")
 			return
 		}
 
@@ -210,28 +212,28 @@ func (h *Hub) processMessage(m *ClientCommand) {
 			log.Printf("error converting player-results payload to JSON: %v", err)
 			return
 		}
-		m.client.sendMessage("player-results " + encoded)
+		sendMessageToClient(m.client, "player-results "+encoded)
 
 	case "answer":
 		playerAnswer, err := strconv.Atoi(m.arg)
 		if err != nil {
-			m.client.errorMessage("could not parse answer", "")
+			errorMessageToClient(m.client, "could not parse answer", "")
 			return
 		}
 		pin := h.sessions.GetGamePinForSession(m.client.sessionid)
 		if pin < 0 {
 			h.sessions.SetSessionScreen(m.client.sessionid, "entrance")
-			m.client.errorMessage("could not get game pin for this session", "entrance")
+			errorMessageToClient(m.client, "could not get game pin for this session", "entrance")
 			return
 		}
 		answersUpdate, err := h.games.RegisterAnswer(pin, m.client.sessionid, playerAnswer)
 		if err != nil {
-			m.client.errorMessage("error registering answer: "+err.Error(), "")
+			errorMessageToClient(m.client, "error registering answer: "+err.Error(), "")
 			return
 		}
 
 		// send this player to wait for question to end screen
-		m.client.screen("waitforquestionend")
+		h.sendClientToScreen(m.client, "waitforquestionend")
 
 		encoded, err := convertToJSON(&answersUpdate)
 		if err != nil {
@@ -241,12 +243,12 @@ func (h *Hub) processMessage(m *ClientCommand) {
 		h.sendMessageToGameHost(pin, "players-answered "+encoded)
 
 	case "host-back-to-start":
-		m.client.screen("entrance")
+		h.sendClientToScreen(m.client, "entrance")
 
 	case "cancel-game":
 		game, err := h.ensureUserIsGameHost(m)
 		if err != nil {
-			m.client.errorMessage(err.Error(), "")
+			errorMessageToClient(m.client, err.Error(), "")
 			return
 		}
 		players := game.getPlayers()
@@ -256,14 +258,14 @@ func (h *Hub) processMessage(m *ClientCommand) {
 		h.games.Delete(game.Pin)
 
 	case "host-game":
-		m.client.screen("hostselectquiz")
+		h.sendClientToScreen(m.client, "hostselectquiz")
 
 	case "hostgamelobby":
 		// create new game
 		pin, err := h.games.Add(m.client.sessionid)
 		if err != nil {
 			h.sessions.SetSessionScreen(m.client.sessionid, "hostselectquiz")
-			m.client.errorMessage("could not add game: "+err.Error(), "hostselectquiz")
+			errorMessageToClient(m.client, "could not add game: "+err.Error(), "hostselectquiz")
 			log.Printf("could not add game: " + err.Error())
 			return
 		}
@@ -271,71 +273,71 @@ func (h *Hub) processMessage(m *ClientCommand) {
 		quizid, err := strconv.Atoi(m.arg)
 		if err != nil {
 			h.sessions.SetSessionScreen(m.client.sessionid, "hostselectquiz")
-			m.client.errorMessage("expected int argument", "hostselectquiz")
+			errorMessageToClient(m.client, "expected int argument", "hostselectquiz")
 			return
 		}
 		quiz, err := h.quizzes.Get(quizid)
 		if err != nil {
 			h.sessions.SetSessionScreen(m.client.sessionid, "hostselectquiz")
-			m.client.errorMessage("error getting quiz in new game: "+err.Error(), "hostselectquiz")
+			errorMessageToClient(m.client, "error getting quiz in new game: "+err.Error(), "hostselectquiz")
 			return
 		}
 		h.games.SetGameQuiz(pin, quiz)
-		m.client.screen("hostgamelobby")
+		h.sendClientToScreen(m.client, "hostgamelobby")
 
 	case "start-game":
 		game, err := h.ensureUserIsGameHost(m)
 		if err != nil {
-			m.client.errorMessage(err.Error(), "")
+			errorMessageToClient(m.client, err.Error(), "")
 			return
 		}
 		gameState, err := h.games.NextState(game.Pin)
 		if err != nil {
-			m.client.errorMessage("error starting game: "+err.Error(), "")
+			errorMessageToClient(m.client, "error starting game: "+err.Error(), "")
 			return
 		}
 		if gameState != QuestionInProgress {
-			m.client.errorMessage(fmt.Sprintf("game was not in an expected state: %d", gameState), "")
+			errorMessageToClient(m.client, fmt.Sprintf("game was not in an expected state: %d", gameState), "")
 			return
 		}
-		m.client.screen("hostshowquestion")
+		h.sendClientToScreen(m.client, "hostshowquestion")
 		h.sendGamePlayersToAnswerQuestionScreen(game.Pin)
 
 	case "show-results":
 		pin, err := h.sendQuestionResultsToHost(m)
 		if err != nil {
-			m.client.errorMessage("error sending question results: "+err.Error(), "")
+			errorMessageToClient(m.client, "error sending question results: "+err.Error(), "")
 			return
 		}
-		m.client.screen("hostshowresults")
+		h.sendClientToScreen(m.client, "hostshowresults")
 		h.informGamePlayersOfResults(pin)
 
 	case "query-host-results":
 		if _, err := h.sendQuestionResultsToHost(m); err != nil {
-			m.client.errorMessage("error sending question results: "+err.Error(), "")
+			errorMessageToClient(m.client, "error sending question results: "+err.Error(), "")
 			return
 		}
 
 	case "next-question":
 		game, err := h.ensureUserIsGameHost(m)
 		if err != nil {
-			m.client.errorMessage(err.Error(), "")
+			errorMessageToClient(m.client, err.Error(), "")
 			return
 		}
 
 		gameState, err := h.games.NextState(game.Pin)
 		if err != nil {
-			m.client.errorMessage("error setting game to next state: "+err.Error(), "")
+			errorMessageToClient(m.client, "error setting game to next state: "+err.Error(), "")
 			return
 		}
 		if gameState == QuestionInProgress {
-			m.client.screen("hostshowquestion")
+			h.sendClientToScreen(m.client, "hostshowquestion")
 			h.sendGamePlayersToAnswerQuestionScreen(game.Pin)
 			return
 		}
 
 		// assume that game has ended
-		m.client.screen("hostshowgameresults")
+		h.sendClientToScreen(m.client, "hostshowgameresults")
 
 		players := game.getPlayers()
 		h.RemoveGameFromSessions(players)
@@ -344,15 +346,15 @@ func (h *Hub) processMessage(m *ClientCommand) {
 	case "delete-game":
 		game, err := h.ensureUserIsGameHost(m)
 		if err != nil {
-			m.client.errorMessage(err.Error(), "")
+			errorMessageToClient(m.client, err.Error(), "")
 			return
 		}
 		h.games.Delete(game.Pin)
 		h.sessions.SetSessionGamePin(m.client.sessionid, -1)
-		m.client.screen("hostselectquiz")
+		h.sendClientToScreen(m.client, "hostselectquiz")
 
 	default:
-		m.client.errorMessage("invalid command", "")
+		errorMessageToClient(m.client, "invalid command", "")
 	}
 }
 
@@ -404,7 +406,7 @@ func (h *Hub) sendQuestionResultsToHost(m *ClientCommand) (int, error) {
 	if err != nil {
 		return -1, fmt.Errorf("error converting question results payload to JSON: %v", err)
 	}
-	m.client.sendMessage("question-results " + encoded)
+	sendMessageToClient(m.client, "question-results "+encoded)
 
 	return game.Pin, nil
 }
@@ -420,7 +422,7 @@ func (h *Hub) sendMessageToGameHost(pin int, message string) {
 		// host has probably disconnected
 		return
 	}
-	hostclient.sendMessage(message)
+	sendMessageToClient(hostclient, message)
 }
 
 // We are doing all this in the hub for performance reasons - if we did this
@@ -444,8 +446,8 @@ func (h *Hub) sendGamePlayersToAnswerQuestionScreen(pin int) {
 		if client == nil {
 			continue
 		}
-		client.sendMessage(fmt.Sprintf("display-choices %d", answerCount))
-		client.sendMessage("screen answerquestion")
+		sendMessageToClient(client, fmt.Sprintf("display-choices %d", answerCount))
+		sendMessageToClient(client, "screen answerquestion")
 	}
 }
 
@@ -484,8 +486,8 @@ func (h *Hub) informGamePlayersOfResults(pin int) {
 			log.Printf("error converting player-results payload to JSON: %v", err)
 			continue
 		}
-		client.sendMessage("player-results " + encoded)
-		client.sendMessage("screen displayplayerresults")
+		sendMessageToClient(client, "player-results "+encoded)
+		sendMessageToClient(client, "screen displayplayerresults")
 	}
 }
 
@@ -495,7 +497,7 @@ func (h *Hub) SendClientsToScreen(sessionids []string, screen string) {
 		if client == nil {
 			continue
 		}
-		client.screen(screen)
+		h.sendClientToScreen(client, screen)
 	}
 }
 
@@ -503,4 +505,179 @@ func (h *Hub) RemoveGameFromSessions(sessionids []string) {
 	for _, id := range sessionids {
 		h.sessions.DeregisterGameFromSession(id)
 	}
+}
+
+func (h *Hub) sendClientToScreen(c *Client, s string) {
+	session := h.sessions.GetSession(c.sessionid)
+	if session == nil {
+		errorMessageToClient(c, "session does not exist anymore", "entrance")
+		return
+	}
+
+	// ensure that session is admin if trying to access host screens
+	if strings.HasPrefix(s, "host") && !session.Admin {
+		s = "authenticateuser"
+	}
+
+	switch s {
+	case "hostselectquiz":
+		type meta struct {
+			Id   int    `json:"id"`
+			Name string `json:"name"`
+		}
+		ml := []meta{}
+		for _, q := range h.quizzes.GetQuizzes() {
+			ml = append(ml, meta{
+				Id:   q.Id,
+				Name: q.Name,
+			})
+		}
+
+		encoded, err := convertToJSON(&ml)
+		if err != nil {
+			errorMessageToClient(c, fmt.Sprintf("error encoding json: %v", err), "hostselectquiz")
+			return
+		}
+		sendMessageToClient(c, "all-quizzes "+encoded)
+
+	case "hostgamelobby":
+		// send over game object with lobby-game-metadata
+		game, err := h.games.Get(session.Gamepin)
+		if err != nil {
+			errorMessageToClient(c, fmt.Sprintf("could not retrieve game %d", session.Gamepin), "entrance")
+			h.sessions.SetSessionScreen(session.Id, "entrance")
+			return
+		}
+
+		gameMetadata := struct {
+			Pin     int      `json:"pin"`
+			Name    string   `json:"name"`
+			Host    string   `json:"host"`
+			Players []string `json:"players"`
+		}{
+			Pin:  game.Pin,
+			Name: game.Quiz.Name,
+			Host: game.Host,
+		}
+		playerids := []string{}
+		for k := range game.Players {
+			playerids = append(playerids, k)
+		}
+		gameMetadata.Players = h.sessions.ConvertSessionIdsToNames(playerids)
+
+		encoded, err := convertToJSON(&gameMetadata)
+		if err != nil {
+			errorMessageToClient(c, "error converting lobby-game-metadata payload to JSON: "+err.Error(), "")
+			return
+		}
+		sendMessageToClient(c, "lobby-game-metadata "+encoded)
+
+	case "hostshowquestion":
+		session := h.sessions.GetSession(c.sessionid)
+		if session == nil {
+			c.sessionid = ""
+			errorMessageToClient(c, "could not get session", "entrance")
+			return
+		}
+
+		currentQuestion, err := h.games.GetCurrentQuestion(session.Gamepin)
+		if err != nil {
+			// if the host disconnected while the question was live, and if
+			// the game state has now changed, we may need to move the host to
+			// the relevant screen
+			unexpectedState, ok := err.(*UnexpectedStateError)
+			if ok && unexpectedState.CurrentState == ShowResults {
+				h.processMessage(&ClientCommand{
+					client: c,
+					cmd:    "show-results",
+					arg:    "",
+				})
+				return
+			}
+
+			errorMessageToClient(c, "error retrieving question: "+err.Error(), "")
+			return
+		}
+
+		encoded, err := convertToJSON(&currentQuestion)
+		if err != nil {
+			errorMessageToClient(c, "error converting question to JSON: "+err.Error(), "")
+			return
+		}
+		sendMessageToClient(c, "hostshowquestion "+encoded)
+
+		// The logic for answerquestion is in the hub
+		//case "answerquestion":
+
+	case "hostshowgameresults":
+		session := h.sessions.GetSession(c.sessionid)
+		if session == nil {
+			c.sessionid = ""
+			errorMessageToClient(c, "could not get session", "entrance")
+			return
+		}
+
+		winners, err := h.games.GetWinners(session.Gamepin)
+		if err != nil {
+			errorMessageToClient(c, "error retrieving game winners: "+err.Error(), "")
+			return
+		}
+		type FriendlyScore struct {
+			Name  string `json:"name"`
+			Score int    `json:"score"`
+		}
+		fl := []FriendlyScore{}
+		for _, w := range winners {
+			session := h.sessions.GetSession(w.Id)
+			if session == nil {
+				// player session doesn't exist anymore
+				continue
+			}
+			fl = append(fl, FriendlyScore{
+				Name:  session.Name,
+				Score: w.Score,
+			})
+		}
+		encoded, err := convertToJSON(&fl)
+		if err != nil {
+			errorMessageToClient(c, "error converting show-winners payload to JSON: "+err.Error(), "")
+			return
+		}
+		log.Printf("winners for game %d: %s", session.Gamepin, encoded)
+		sendMessageToClient(c, "show-winners "+encoded)
+
+		// end of switch
+	}
+
+	h.sessions.UpdateScreenForSession(c.sessionid, s)
+	sendMessageToClient(c, "screen "+s)
+}
+
+func sendMessageToClient(c *Client, s string) {
+	c.send <- []byte(s)
+}
+
+func errorMessageToClient(c *Client, message, nextscreen string) {
+	data := struct {
+		Message    string `json:"message"`
+		NextScreen string `json:"nextscreen"`
+	}{
+		Message:    message,
+		NextScreen: nextscreen,
+	}
+	encoded, err := convertToJSON(data)
+	if err != nil {
+		log.Printf("error converting payload for error message: %v", err)
+		return
+	}
+	sendMessageToClient(c, "error "+encoded)
+}
+
+func convertToJSON(input interface{}) (string, error) {
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
+	if err := enc.Encode(input); err != nil {
+		return "", err
+	}
+	return b.String(), nil
 }
