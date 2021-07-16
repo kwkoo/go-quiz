@@ -2,6 +2,7 @@ package pkg
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -486,17 +487,13 @@ func (g *Games) Add(host string) (int, error) {
 }
 
 func generatePin() int {
-	return 1
-	// todo: commented this out to make testing easier
-	/*
-		b := make([]byte, 4)
-		rand.Read(b)
+	b := make([]byte, 4)
+	rand.Read(b)
 
-		total := int(b[0]) + int(b[1]) + int(b[2]) + int(b[3])
-		total = total % 998
-		total++
-		return total
-	*/
+	total := int(b[0]) + int(b[1]) + int(b[2]) + int(b[3])
+	total = total % 998
+	total++
+	return total
 }
 
 func (g *Games) getGamePointer(pin int) (*Game, error) {

@@ -3,12 +3,12 @@ PACKAGE=go-quiz
 BASE:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 COVERAGEOUTPUT=coverage.out
 COVERAGEHTML=coverage.html
-IMAGENAME="kwkoo/$(PACKAGE)"
+IMAGENAME="ghcr.io/kwkoo/$(PACKAGE)"
 VERSION="0.1"
 ADMINPASSWORD="password"
 SESSIONTIMEOUT=300
 
-.PHONY: run build clean test coverage image runcontainer redis importquizzes
+.PHONY: run build clean test coverage image runcontainer redis importquizzes importquizzesocp
 run:
 	@ADMINPASSWORD="$(ADMINPASSWORD)" SESSIONTIMEOUT=$(SESSIONTIMEOUT) go run main.go -docroot $(BASE)/docroot
 
@@ -33,6 +33,7 @@ coverage:
 
 image: 
 	docker build --rm -t $(IMAGENAME):$(VERSION) $(BASE)
+	docker push $(IMAGENAME):$(VERSION)
 
 runcontainer:
 	docker run \
@@ -41,6 +42,7 @@ runcontainer:
 	  --name $(PACKAGE) \
 	  -p 8080:8080 \
 	  -e TZ=Asia/Singapore \
+	  -e ADMINPASSWORD="$(ADMINPASSWORD)" \
 	  $(IMAGENAME):$(VERSION)
 
 redis:
@@ -53,3 +55,6 @@ redis:
 
 importquizzes:
 	@curl -XPUT -u admin:$(ADMINPASSWORD) -d @$(BASE)/quizzes.json http://localhost:8080/api/quiz/bulk
+
+importquizzesocp:
+	@curl -XPUT -u admin:myquizpassword -d @$(BASE)/quizzes.json https://`oc get route/quiz -o jsonpath='{.spec.host}'`/api/quiz/bulk

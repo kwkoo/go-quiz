@@ -19,6 +19,10 @@ const authRealm = "Quiz Admin"
 //go:embed docroot/*
 var content embed.FS
 
+func health(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintln(w, "OK")
+}
+
 func main() {
 	config := struct {
 		Port           int    `default:"8080" usage:"HTTP listener port"`
@@ -54,6 +58,8 @@ func main() {
 	fileServer := http.FileServer(filesystem).ServeHTTP
 
 	http.HandleFunc("/admin/", auth.BasicAuth(fileServer))
+
+	http.HandleFunc("/healthz", health)
 
 	cookieGen := pkg.InitCookieGenerator(fileServer)
 	http.HandleFunc("/", cookieGen.ServeHTTP)

@@ -1,0 +1,21 @@
+version: "3.5"
+
+services:
+
+  quiz:
+    container_name: quiz
+    image: "ghcr.io/kwkoo/go-quiz:0.1"
+    ports:
+      - 8080:8080
+    environment:
+      - TZ=Asia/Singapore
+      - REDISHOST=redis:6379
+      - ADMINPASSWORD=password
+    depends_on:
+      - redis
+
+  redis:
+    container_name: redis
+    image: "redis:5"
+    ports:
+      - 6379:6379
