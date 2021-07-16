@@ -53,16 +53,17 @@
       <div v-show="list.sessions != null" class="box">
         <h2 class="subtitle">All Sessions</h2>
         <table v-show="list.sessions != null">
-          <tr><th>ID</th><th>Client Connected</th><th>Screen</th><th>Game Pin</th><th>Name</th><th>Admin</th><th>Delete</th></tr>
+          <tr><th>ID</th><th>Client Connected</th><th>Screen</th><th>Expiry</th><th>Game Pin</th><th>Name</th><th>Admin</th><th>Extend / Delete</th></tr>
           <template v-for="(session, index) in list.sessions" class="center">
             <tr>
               <td>{{ session.id }}</td>
               <td>{{ session.client == null?'no':'yes' }}</td>
               <td>{{ session.screen }}</td>
+              <td>{{ session.expiry }}</td>
               <td>{{ session.gamepin }}</td>
               <td>{{ session.name }}</td>
               <td>{{ session.admin?'yes':'no' }}</td>
-              <td><button v-on:click="deleteSession(session.id)">&#10060;</button></td>
+              <td><button v-on:click="extendSession(session.id)">&#9201;</button><button v-on:click="deleteSession(session.id)">&#10060;</button></td>
             </tr>
           </template>
         </table>

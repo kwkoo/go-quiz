@@ -12,13 +12,13 @@ import (
 const reaperInterval = 60
 
 type Session struct {
-	Id      string  `json:"id"`
-	Client  *Client `json:"client"`
-	Screen  string  `json:"screen"`
-	Gamepin int     `json:"gamepin"`
-	Name    string  `json:"name"`
-	Admin   bool    `json:"admin"`
-	expiry  time.Time
+	Id      string    `json:"id"`
+	Client  *Client   `json:"client"`
+	Screen  string    `json:"screen"`
+	Gamepin int       `json:"gamepin"`
+	Name    string    `json:"name"`
+	Admin   bool      `json:"admin"`
+	Expiry  time.Time `json:"expiry"`
 }
 
 func unmarshalSession(b []byte) (*Session, error) {
@@ -47,7 +47,7 @@ func (s *Session) copy() Session {
 		Gamepin: s.Gamepin,
 		Name:    s.Name,
 		Admin:   s.Admin,
-		expiry:  s.expiry,
+		Expiry:  s.Expiry,
 	}
 }
 
@@ -104,7 +104,7 @@ func (s *Sessions) NewSession(id string, client *Client, screen string) *Session
 		Id:     id,
 		Client: client,
 		Screen: screen,
-		expiry: time.Now().Add(time.Duration(s.sessionTimeout) * time.Second),
+		Expiry: time.Now().Add(time.Duration(s.sessionTimeout) * time.Second),
 	}
 
 	s.mutex.Lock()
@@ -115,11 +115,21 @@ func (s *Sessions) NewSession(id string, client *Client, screen string) *Session
 	return session
 }
 
+func (s *Sessions) ExtendSessionExpiry(id string) {
+	session := s.GetSession(id)
+
+	if session == nil {
+		return
+	}
+
+	s.persist(session)
+}
+
 func (s *Sessions) expireSessions() {
 	now := time.Now()
 	s.mutex.Lock()
 	for id, session := range s.all {
-		if now.After(session.expiry) {
+		if now.After(session.Expiry) {
 			delete(s.all, id)
 			log.Printf("expiring session %s", id)
 		}
@@ -128,7 +138,9 @@ func (s *Sessions) expireSessions() {
 }
 
 func (s *Sessions) persist(session *Session) {
-	session.expiry = time.Now().Add(time.Duration(s.sessionTimeout) * time.Second)
+	s.mutex.Lock()
+	session.Expiry = time.Now().Add(time.Duration(s.sessionTimeout) * time.Second)
+	s.mutex.Unlock()
 
 	if s.engine == nil {
 		return

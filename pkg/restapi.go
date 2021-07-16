@@ -28,6 +28,10 @@ func (api *RestApi) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		api.Session(w, r)
 		return
 	}
+	if strings.HasPrefix(path, "/api/extendsession/") {
+		api.ExtendSession(w, r)
+		return
+	}
 	if strings.HasPrefix(path, "/api/game") {
 		api.Game(w, r)
 		return
@@ -121,6 +125,16 @@ func (api *RestApi) Quiz(w http.ResponseWriter, r *http.Request) {
 		streamResponse(w, false, fmt.Sprintf("error updating quiz: %v", err))
 		return
 	}
+	streamResponse(w, true, "")
+}
+
+func (api *RestApi) ExtendSession(w http.ResponseWriter, r *http.Request) {
+	id := lastPart(r.URL.Path)
+	if len(id) == 0 {
+		streamResponse(w, false, "invalid session id")
+		return
+	}
+	api.hub.sessions.ExtendSessionExpiry(id)
 	streamResponse(w, true, "")
 }
 

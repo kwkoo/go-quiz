@@ -99,6 +99,13 @@ var app = new Vue({
             })
         },
 
+        extendSession: function(id) {
+            let that = this
+            this.webRequest('GET', '/api/extendsession/' + id, null, function(resp) {
+                that.showScreen('start')
+            })
+        },
+
         deleteSession: function(id) {
             let that = this
             this.webRequest('DELETE', '/api/session/' + id, null, function(resp) {
