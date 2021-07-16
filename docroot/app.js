@@ -17,7 +17,7 @@ var app = new Vue({
         hostshowgameresults: { data: [], disabled: true },
         error: { message: '', next: '', disabled: true },
         sessionid: '',
-        conn: {},
+        conn: null,
         window: { width: 0, height: 0 }
     },
 
@@ -31,32 +31,7 @@ var app = new Vue({
     },
 
     mounted: function() {
-        this.sessionid = this.readCookie('quizsession')
-        if (this.sessionid == null || this.sessionid.length == 0) {
-            this.showError('Please enable cookies in your browser')
-            return
-        }
-        if (window["WebSocket"]) {
-            this.conn = new WebSocket("ws://" + document.location.host + "/ws")
-
-            let that = this
-
-            this.conn.onopen = function (evt) {
-                that.showScreen('entrance')
-                that.registerSession()
-            }
-            this.conn.onclose = function (evt) {
-                that.showError('Connection closed')
-            }
-            this.conn.onmessage = function (evt) {
-                let messages = evt.data.split('\n')
-                for (var i=0; i<messages.length; i++) {
-                    that.processIncoming(messages[i])
-                }
-            }
-        } else {
-            this.showError('Your browser does not support WebSockets')
-        }
+        this.showScreen('start')
     },
 
     methods: {
@@ -75,14 +50,54 @@ var app = new Vue({
 
         showScreen: function(target) {
             switch (target) {
-                case 'hostselectquiz':
-                    this.hostselectquiz.disabled = false
+                case 'start':
+                    this.setupConn()
                     break
                 case 'entrance':
                     this.entrance.disabled = false
                     break
+                case 'hostselectquiz':
+                    this.hostselectquiz.disabled = false
+                    break
             }
             this.screen = target
+        },
+
+        setupConn: function() {
+            this.sessionid = this.readCookie('quizsession')
+            if (this.sessionid == null || this.sessionid.length == 0) {
+                this.showError('Please enable cookies in your browser')
+                return
+            }
+            if (this.conn != null) {
+                try {
+                    this.conn.close()
+                } catch (err) {
+                    console.log('Exception closing websocket: ' + err)
+                }
+                this.conn = null
+            }
+            if (window["WebSocket"]) {
+                this.conn = new WebSocket((document.location.protocol.startsWith('https')?'wss':'ws') + '://' + document.location.host + "/ws")
+    
+                let that = this
+    
+                this.conn.onopen = function (evt) {
+                    that.registerSession()
+                }
+                this.conn.onclose = function (evt) {
+                    that.conn = null
+                    that.showError('Connection closed', 'start')
+                }
+                this.conn.onmessage = function (evt) {
+                    let messages = evt.data.split('\n')
+                    for (var i=0; i<messages.length; i++) {
+                        that.processIncoming(messages[i])
+                    }
+                }
+            } else {
+                this.showError('Your browser does not support WebSockets')
+            }
         },
 
         handleResize: function() {
@@ -320,6 +335,11 @@ var app = new Vue({
         
                         if (this.hostshowquestion && this.hostshowquestion.data && this.hostshowquestion.data.timeleft) {
                             let that = this
+
+                            if (this.hostshowquestion.timer != null) {
+                                clearInterval(this.hostshowquestion.timer)
+                                this.hostshowquestion.timer = null
+                            }
 
                             this.hostshowquestion.timer = setInterval(function() {
                                 if (that.hostshowquestion && that.hostshowquestion.data && that.hostshowquestion.data.timeleft > 0) {
