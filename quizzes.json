@@ -1,1 +1,1 @@
-[{"id":1,"name":"Food","questionDuration":20,"questions":[{"question":"What did I have for breakfast?","answers":["Baon","Eggs","Toast","Sausages"],"correct":1},{"question":"What did I have for lunch?","answers":["Sandwich","Pizza","Noodles"],"correct":0}]}]
+[{"name":"Food","questionDuration":20,"questions":[{"question":"What did I have for breakfast?","answers":["Baon","Eggs","Toast","Sausages"],"correct":1},{"question":"What did I have for lunch?","answers":["Sandwich","Pizza","Noodles"],"correct":0}]}]
