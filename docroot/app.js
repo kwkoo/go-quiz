@@ -87,7 +87,7 @@ var app = new Vue({
                 }
                 this.conn.onclose = function (evt) {
                     that.conn = null
-                    that.showError('Connection closed', 'start')
+                    that.showError('Connection closed - click OK to reconnect', 'start')
                 }
                 this.conn.onmessage = function (evt) {
                     let messages = evt.data.split('\n')

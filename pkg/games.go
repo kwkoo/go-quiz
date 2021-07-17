@@ -42,13 +42,27 @@ type UnexpectedStateError struct {
 }
 
 func (e *UnexpectedStateError) Error() string {
-	return fmt.Sprintf("Game is in an unexpected state: %v", e.Err.Error())
+	return fmt.Sprintf("game is in an unexpected state: %v", e.Err)
 }
 
 func NewUnexpectedStateError(state int, message string) *UnexpectedStateError {
 	return &UnexpectedStateError{
 		CurrentState: state,
 		Err:          errors.New(message),
+	}
+}
+
+type NoSuchGameError struct {
+	Pin int
+}
+
+func (e *NoSuchGameError) Error() string {
+	return fmt.Sprintf("game %d does not exist", e.Pin)
+}
+
+func NewNoSuchGameError(pin int) *NoSuchGameError {
+	return &NoSuchGameError{
+		Pin: pin,
 	}
 }
 
@@ -258,7 +272,7 @@ func (g *Game) nextState() (int, error) {
 
 func (g *Game) showResults() error {
 	if g.GameState != QuestionInProgress && g.GameState != ShowResults {
-		return NewUnexpectedStateError(g.GameState, fmt.Sprintf("game with pin %d is not in the expected states", g.Pin))
+		return NewUnexpectedStateError(g.GameState, fmt.Sprintf("game with pin %d is not in the expected state", g.Pin))
 	}
 	g.GameState = ShowResults
 	return nil
@@ -274,7 +288,7 @@ func (g *Game) getCurrentQuestion() (bool, GameCurrentQuestion, error) {
 	timeLeft := int(g.QuestionDeadline.Unix() - now.Unix())
 	if timeLeft <= 0 || len(g.PlayersAnswered) >= len(g.Players) {
 		g.GameState = ShowResults
-		return true, GameCurrentQuestion{}, fmt.Errorf("game with pin %d should be showing results", g.Pin)
+		return true, GameCurrentQuestion{}, NewUnexpectedStateError(ShowResults, fmt.Sprintf("game with pin %d should be showing results", g.Pin))
 	}
 
 	question, err := g.Quiz.GetQuestion(g.QuestionIndex)
@@ -301,13 +315,13 @@ func (g *Game) registerAnswer(sessionid string, answerIndex int) (bool, AnswersU
 		return false, AnswersUpdate{}, fmt.Errorf("player %s is not part of game %d", sessionid, g.Pin)
 	}
 	if g.GameState != QuestionInProgress {
-		return false, AnswersUpdate{}, fmt.Errorf("game %d is not showing a live question", g.Pin)
+		return false, AnswersUpdate{}, NewUnexpectedStateError(g.GameState, fmt.Sprintf("game %d is not showing a live question", g.Pin))
 	}
 
 	now := time.Now()
 	if now.After(g.QuestionDeadline) {
 		g.GameState = ShowResults
-		return true, AnswersUpdate{}, fmt.Errorf("question %d in game %d has expired", g.QuestionIndex, g.Pin)
+		return true, AnswersUpdate{}, NewUnexpectedStateError(ShowResults, fmt.Sprintf("question %d in game %d has expired", g.QuestionIndex, g.Pin))
 	}
 
 	question, err := g.Quiz.GetQuestion(g.QuestionIndex)
@@ -506,13 +520,13 @@ func (g *Games) getGamePointer(pin int) (*Game, error) {
 	}
 
 	if g.engine == nil {
-		return nil, fmt.Errorf("could not find game with pin %d", pin)
+		return nil, NewNoSuchGameError(pin)
 	}
 
 	// game doesn't exist in memory - see if it's in the persistent store
 	data, err := g.engine.Get(fmt.Sprintf("game:%d", pin))
 	if err != nil {
-		return nil, fmt.Errorf("could not find game with pin %d", pin)
+		return nil, NewNoSuchGameError(pin)
 	}
 	game, err = unmarshalGame(data)
 	if err != nil {
@@ -577,7 +591,7 @@ func (g *Games) Delete(pin int) {
 func (g *Games) AddPlayerToGame(sessionid string, pin int) error {
 	game, err := g.getGamePointer(pin)
 	if err != nil {
-		return fmt.Errorf("game with pin %d does not exist", pin)
+		return NewNoSuchGameError(pin)
 	}
 
 	if game.GameState != GameNotStarted {
@@ -625,7 +639,7 @@ func (g *Games) DeletePlayerFromGame(sessionid string, pin int) {
 func (g *Games) NextState(pin int) (int, error) {
 	game, err := g.getGamePointer(pin)
 	if err != nil {
-		return 0, fmt.Errorf("game with pin %d does not exist", pin)
+		return 0, NewNoSuchGameError(pin)
 	}
 
 	g.mutex.Lock()
@@ -641,13 +655,15 @@ func (g *Games) NextState(pin int) (int, error) {
 func (g *Games) ShowResults(pin int) error {
 	game, err := g.getGamePointer(pin)
 	if err != nil {
-		return fmt.Errorf("game with pin %d does not exist", pin)
+		return NewNoSuchGameError(pin)
 	}
 
 	g.mutex.Lock()
 	err = game.showResults()
 	g.mutex.Unlock()
-	g.persist(game)
+	if err == nil {
+		g.persist(game)
+	}
 	return err
 }
 
@@ -655,7 +671,7 @@ func (g *Games) ShowResults(pin int) error {
 func (g *Games) GetCurrentQuestion(pin int) (GameCurrentQuestion, error) {
 	game, err := g.getGamePointer(pin)
 	if err != nil {
-		return GameCurrentQuestion{}, fmt.Errorf("game with pin %d does not exist", pin)
+		return GameCurrentQuestion{}, NewNoSuchGameError(pin)
 	}
 
 	g.mutex.Lock()
@@ -671,7 +687,7 @@ func (g *Games) GetCurrentQuestion(pin int) (GameCurrentQuestion, error) {
 func (g *Games) RegisterAnswer(pin int, sessionid string, answerIndex int) (AnswersUpdate, error) {
 	game, err := g.getGamePointer(pin)
 	if err != nil {
-		return AnswersUpdate{}, fmt.Errorf("game with pin %d does not exist", pin)
+		return AnswersUpdate{}, NewNoSuchGameError(pin)
 	}
 
 	g.mutex.Lock()
@@ -686,7 +702,7 @@ func (g *Games) RegisterAnswer(pin int, sessionid string, answerIndex int) (Answ
 func (g *Games) GetQuestionResults(pin int) (QuestionResults, error) {
 	game, err := g.getGamePointer(pin)
 	if err != nil {
-		return QuestionResults{}, fmt.Errorf("game with pin %d does not exist", pin)
+		return QuestionResults{}, NewNoSuchGameError(pin)
 	}
 
 	g.mutex.RLock()
@@ -697,7 +713,7 @@ func (g *Games) GetQuestionResults(pin int) (QuestionResults, error) {
 func (g *Games) GetWinners(pin int) ([]PlayerScore, error) {
 	game, err := g.getGamePointer(pin)
 	if err != nil {
-		return []PlayerScore{}, fmt.Errorf("game with pin %d does not exist", pin)
+		return []PlayerScore{}, NewNoSuchGameError(pin)
 	}
 
 	g.mutex.RLock()
@@ -708,7 +724,7 @@ func (g *Games) GetWinners(pin int) ([]PlayerScore, error) {
 func (g *Games) GetGameState(pin int) (int, error) {
 	game, err := g.getGamePointer(pin)
 	if err != nil {
-		return 0, fmt.Errorf("game with pin %d does not exist", pin)
+		return 0, NewNoSuchGameError(pin)
 	}
 
 	return game.getGameState(), nil
