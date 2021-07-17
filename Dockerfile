@@ -2,6 +2,7 @@ FROM golang:1.16.6 as builder
 ARG PREFIX=github.com/kwkoo
 ARG PACKAGE=go-quiz
 LABEL builder=true
+LABEL org.opencontainers.image.source https://github.com/kwkoo/go-quiz
 COPY . /go/src/
 RUN \
   set -x \
