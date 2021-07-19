@@ -205,19 +205,6 @@ func (s *Sessions) GetNameForSession(id string) string {
 	return session.Name
 }
 
-func (s *Sessions) UpdateScreenForSession(id, newscreen string) {
-	session := s.GetSession(id)
-
-	if session == nil {
-		return
-	}
-
-	s.mutex.Lock()
-	session.Screen = newscreen
-	s.mutex.Unlock()
-	s.persist(session)
-}
-
 func (s *Sessions) GetClientForSession(id string) *Client {
 	session := s.GetSession(id)
 
