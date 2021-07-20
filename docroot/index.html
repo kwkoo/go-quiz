@@ -164,7 +164,10 @@
     <div v-show="screen === 'host-show-game-results'">
       <h2 class="winnertitle">Top Players</h2>
       <h3 class="winner" v-for="(p, index) in hostshowgameresults.data">{{ index + 1 }}. {{ p.name }} - {{ p.score }}</h3>
-      <button class="button" :disabled="hostshowgameresults.disabled" v-on:click="deleteGame">Delete Game</button>
+      <div class="center">
+        <button class="buttonauth" :disabled="hostshowgameresults.disabled" v-on:click="saveWinners">Export Winners</button>
+        <button class="buttonauth" :disabled="hostshowgameresults.disabled" v-on:click="deleteGame">Delete Game</button>
+      </div>
     </div>
 
 

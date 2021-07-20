@@ -210,6 +210,26 @@ var app = new Vue({
             this.sendCommand('next-question')
         },
 
+        saveWinners: function() {
+            // copied from https://stackoverflow.com/a/30832210
+            let file = new Blob([JSON.stringify(this.hostshowgameresults.data)], {type: 'application/json'})
+            let filename = 'winners.json'
+            if (window.navigator.msSaveOrOpenBlob) // IE10+
+                window.navigator.msSaveOrOpenBlob(file, filename)
+            else { // others
+                let a = document.createElement('a')
+                let url = URL.createObjectURL(file)
+                a.href = url;
+                a.download = filename
+                document.body.appendChild(a)
+                a.click()
+                setTimeout(function() {
+                    document.body.removeChild(a)
+                    window.URL.revokeObjectURL(url)
+                }, 0)
+            }
+        },
+
         deleteGame: function() {
             this.hostshowgameresults.disabled = true
             this.sendCommand('delete-game')
