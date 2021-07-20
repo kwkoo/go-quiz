@@ -102,7 +102,8 @@ type QuestionResults struct {
 }
 
 type PlayerScore struct {
-	Id    string `json:"id"` // this is set to the session ID in games, but can be replaced with the player name somewhere else
+	id    string
+	Name  string `json:"name"`
 	Score int    `json:"score"`
 }
 
@@ -385,7 +386,10 @@ func (g *Game) getWinners() []PlayerScore {
 	pl := make(PlayerScoreList, len(g.Players))
 	i := 0
 	for k, v := range g.Players {
-		pl[i] = PlayerScore{k, v}
+		pl[i] = PlayerScore{
+			id:    k,
+			Score: v,
+		}
 		i++
 	}
 	sort.Sort(sort.Reverse(pl))

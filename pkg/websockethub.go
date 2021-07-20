@@ -427,13 +427,12 @@ func (h *Hub) sendQuestionResultsToHost(m *ClientCommand) (int, error) {
 		return -1, fmt.Errorf("error getting question results: %v", err)
 	}
 
-	// this is an ugly hack - go through the top scorers and replace the
-	// session IDs with names
 	for i, ps := range results.TopScorers {
-		name := h.sessions.GetNameForSession(ps.Id)
-		if name != "" {
-			results.TopScorers[i].Id = name
+		name := h.sessions.GetNameForSession(ps.id)
+		if name == "" {
+			name = "unknown"
 		}
+		results.TopScorers[i].Name = name
 	}
 
 	encoded, err := convertToJSON(&results)
@@ -643,7 +642,7 @@ func (h *Hub) sendSessionToScreen(id, s string) {
 		}
 		fl := []FriendlyScore{}
 		for _, w := range winners {
-			session := h.sessions.GetSession(w.Id)
+			session := h.sessions.GetSession(w.id)
 			if session == nil {
 				// player session doesn't exist anymore
 				continue
