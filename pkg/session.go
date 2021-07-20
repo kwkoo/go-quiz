@@ -216,6 +216,9 @@ func (s *Sessions) GetClientForSession(id string) *Client {
 }
 
 func (s *Sessions) UpdateClientForSession(id string, newclient *Client) {
+	if id == "" {
+		return
+	}
 	session := s.GetSession(id)
 
 	if session == nil {

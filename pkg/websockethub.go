@@ -61,17 +61,23 @@ func (h *Hub) Run() {
 		case client := <-h.register:
 			h.clients[client] = true
 		case client := <-h.unregister:
-			if _, ok := h.clients[client]; ok {
-				delete(h.clients, client)
-				close(client.send)
-				if len(client.sessionid) > 0 {
-					h.sessions.UpdateClientForSession(client.sessionid, nil)
-				}
-			}
+			h.deregisterClient(client)
 		case message := <-h.incomingcommands:
 			log.Printf("incoming command: %s, arg: %s", message.cmd, message.arg)
 			h.processMessage(message)
 		}
+	}
+}
+
+func (h *Hub) deregisterClient(client *Client) {
+	if client == nil {
+		return
+	}
+	delete(h.clients, client)
+	close(client.send)
+	if client.sessionid != "" {
+		log.Printf("cleaned up client for session %s", client.sessionid)
+		h.sessions.UpdateClientForSession(client.sessionid, nil)
 	}
 }
 
@@ -392,6 +398,7 @@ func (h *Hub) processMessage(m *ClientCommand) {
 	}
 }
 
+// Also cleans up the client and the session if this user is not the host
 func (h *Hub) ensureUserIsGameHost(m *ClientCommand) (Game, error) {
 	session := h.sessions.GetSession(m.client.sessionid)
 	if session == nil {
@@ -674,8 +681,7 @@ func (h *Hub) sendMessageToClient(c *Client, s string) {
 	select {
 	case c.send <- []byte(s):
 	default:
-		close(c.send)
-		delete(h.clients, c)
+		h.deregisterClient(c)
 	}
 }
 
