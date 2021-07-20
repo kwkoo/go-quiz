@@ -55,6 +55,10 @@ var app = new Vue({
                     break
                 case 'entrance':
                     this.entrance.disabled = false
+                    this.$nextTick(() => this.$refs.playername.focus())
+                    break
+                case 'authenticate-user':
+                    this.$nextTick(() => this.$refs.adminname.focus())
                     break
                 case 'host-select-quiz':
                     this.hostselectquiz.disabled = false

@@ -23,7 +23,7 @@
       <h1 class="title">Join a Game</h1>
       <div>
         <label class="label">Name</label>
-        <input class="forminput" v-model="entrance.data.name">
+        <input ref="playername" class="forminput" v-model="entrance.data.name">
       </div>
       <br>
       <div>
@@ -67,7 +67,7 @@
       <h1 class="title">Admin Authentication</h1>
       <div>
         <label class="label">Username</label>
-        <input class="forminput" v-model="authenticateuser.username">
+        <input ref="adminname" class="forminput" v-model="authenticateuser.username">
       </div>
       <br>
       <div>
