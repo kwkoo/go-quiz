@@ -76,7 +76,7 @@ func (h *Hub) Run() {
 }
 
 func (h *Hub) processMessage(m *ClientCommand) {
-	log.Printf("cmd=%s,arg=%s", m.cmd, m.arg)
+	log.Printf("cmd=%s, arg=%s", m.cmd, m.arg)
 
 	if len(m.client.sessionid) == 0 {
 		// client hasn't identified themselves yet
@@ -95,7 +95,7 @@ func (h *Hub) processMessage(m *ClientCommand) {
 					h.errorMessageToClient(m.client, "you have another active session - disconnect that session before reconnecting", "")
 					return
 				}
-				h.sessions.UpdateClientForSession(m.client.sessionid, m.client)
+				h.sessions.UpdateClientForSession(session.Id, m.client)
 			}
 			h.sendSessionToScreen(session.Id, session.Screen)
 			return
@@ -114,7 +114,7 @@ func (h *Hub) processMessage(m *ClientCommand) {
 	switch m.cmd {
 
 	case "adminlogin":
-		if h.sessions.AuthenticateAdmin(m.client.sessionid, m.arg) {
+		if h.sessions.AuthenticateAdmin(session.Id, m.arg) {
 			h.sendSessionToScreen(session.Id, "hostselectquiz")
 			return
 		}
@@ -137,11 +137,11 @@ func (h *Hub) processMessage(m *ClientCommand) {
 			h.errorMessageToSession(session.Id, "name is missing", "entrance")
 			return
 		}
-		if err := h.games.AddPlayerToGame(m.client.sessionid, pinfo.Pin); err != nil {
+		if err := h.games.AddPlayerToGame(session.Id, pinfo.Pin); err != nil {
 			h.errorMessageToSession(session.Id, "could not add player to game: "+err.Error(), "entrance")
 			return
 		}
-		h.sessions.RegisterSessionInGame(m.client.sessionid, pinfo.Name, pinfo.Pin)
+		h.sessions.RegisterSessionInGame(session.Id, pinfo.Name, pinfo.Pin)
 		h.sendSessionToScreen(session.Id, "waitforgamestart")
 
 		// inform game host of new player
@@ -164,7 +164,7 @@ func (h *Hub) processMessage(m *ClientCommand) {
 		}
 		currentQuestion, err := h.games.GetCurrentQuestion(pin)
 		if err != nil {
-			h.sessions.SetSessionGamePin(m.client.sessionid, -1)
+			h.sessions.SetSessionGamePin(session.Id, -1)
 			if _, ok := err.(*NoSuchGameError); ok {
 				h.errorMessageToSession(session.Id, err.Error(), "entrance")
 				return
@@ -186,7 +186,7 @@ func (h *Hub) processMessage(m *ClientCommand) {
 
 		game, err := h.games.Get(pin)
 		if err != nil {
-			h.sessions.SetSessionGamePin(m.client.sessionid, -1)
+			h.sessions.SetSessionGamePin(session.Id, -1)
 			if _, ok := err.(*NoSuchGameError); ok {
 				h.errorMessageToSession(session.Id, err.Error(), "entrance")
 				return
@@ -196,10 +196,10 @@ func (h *Hub) processMessage(m *ClientCommand) {
 			return
 		}
 
-		_, correct := game.CorrectPlayers[m.client.sessionid]
-		score, ok := game.Players[m.client.sessionid]
+		_, correct := game.CorrectPlayers[session.Id]
+		score, ok := game.Players[session.Id]
 		if !ok {
-			h.sessions.SetSessionGamePin(m.client.sessionid, -1)
+			h.sessions.SetSessionGamePin(session.Id, -1)
 			h.errorMessageToSession(session.Id, "you do not have a score in this game", "entrance")
 			return
 		}
@@ -230,10 +230,10 @@ func (h *Hub) processMessage(m *ClientCommand) {
 			h.errorMessageToSession(session.Id, "could not get game pin for this session", "entrance")
 			return
 		}
-		answersUpdate, err := h.games.RegisterAnswer(pin, m.client.sessionid, playerAnswer)
+		answersUpdate, err := h.games.RegisterAnswer(pin, session.Id, playerAnswer)
 		if err != nil {
 			if _, ok := err.(*NoSuchGameError); ok {
-				h.sessions.SetSessionGamePin(m.client.sessionid, -1)
+				h.sessions.SetSessionGamePin(session.Id, -1)
 				h.errorMessageToSession(session.Id, err.Error(), "entrance")
 				return
 			}
@@ -283,13 +283,13 @@ func (h *Hub) processMessage(m *ClientCommand) {
 
 	case "hostgamelobby":
 		// create new game
-		pin, err := h.games.Add(m.client.sessionid)
+		pin, err := h.games.Add(session.Id)
 		if err != nil {
 			h.errorMessageToSession(session.Id, "could not add game: "+err.Error(), "hostselectquiz")
 			log.Printf("could not add game: " + err.Error())
 			return
 		}
-		h.sessions.SetSessionGamePin(m.client.sessionid, pin)
+		h.sessions.SetSessionGamePin(session.Id, pin)
 		quizid, err := strconv.Atoi(m.arg)
 		if err != nil {
 			h.errorMessageToSession(session.Id, "expected int argument", "hostselectquiz")
@@ -358,7 +358,7 @@ func (h *Hub) processMessage(m *ClientCommand) {
 		gameState, err := h.games.NextState(game.Pin)
 		if err != nil {
 			if _, ok := err.(*NoSuchGameError); ok {
-				h.sessions.SetSessionGamePin(m.client.sessionid, -1)
+				h.sessions.SetSessionGamePin(session.Id, -1)
 				h.errorMessageToSession(session.Id, err.Error(), "entrance")
 			}
 			h.errorMessageToSession(session.Id, "error setting game to next state: "+err.Error(), "hostselectquiz")
