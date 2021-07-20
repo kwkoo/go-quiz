@@ -56,7 +56,7 @@ var app = new Vue({
                 case 'entrance':
                     this.entrance.disabled = false
                     break
-                case 'hostselectquiz':
+                case 'host-select-quiz':
                     this.hostselectquiz.disabled = false
                     break
             }
@@ -139,7 +139,7 @@ var app = new Vue({
         },
 
         adminLogin: function() {
-            this.sendCommand('adminlogin ' + btoa(this.authenticateuser.username + ':' + this.authenticateuser.password))
+            this.sendCommand('admin-login ' + btoa(this.authenticateuser.username + ':' + this.authenticateuser.password))
         },
 
         joinGame: function() {
@@ -174,7 +174,7 @@ var app = new Vue({
 
         hostSelectQuiz: function(quizid) {
             this.hostselectquiz.disabled = true
-            this.sendCommand('hostgamelobby ' + quizid)
+            this.sendCommand('host-game-lobby ' + quizid)
         },
 
         updateHostGameLobbyText: function() {
@@ -231,12 +231,12 @@ var app = new Vue({
         
             console.log('cmd=' + cmd + ',arg=' + arg)
             switch (cmd) {
-                case 'reregistersession':
+                case 'register-session':
                     this.registerSession()
                     break
         
                 case 'screen':
-                    if (this.screen == 'displayplayerresults') {
+                    if (this.screen == 'display-player-results') {
                         // set flag to disabled when we switch away from it
                         this.displayplayerresults.disabled = true
                     }
@@ -245,30 +245,30 @@ var app = new Vue({
                             this.entrance.disabled = false
                             this.setPinFromURL()
                             break
-                        case 'answerquestion':
+                        case 'answer-question':
                             if (this.answerquestion.disabled) {
                                 // we may have been disconnected - request for
                                 // display-choices
                                 this.sendCommand('query-display-choices')
                             }
                             break
-                        case 'displayplayerresults':
+                        case 'display-player-results':
                             if (this.displayplayerresults.disabled) {
                                 // we may have been disconnected - request for results
                                 this.sendCommand('query-player-results')
                             }
                             break
-                        case 'hostshowresults':
+                        case 'host-show-results':
                             // host may have been disconnected - request for question
                             // results
                             if (this.hostshowresults.disabled) {
                                 this.sendCommand('query-host-results')
                             }
                             break
-                        case 'hostshowgameresults':
+                        case 'host-show-game-results':
                             this.hostshowgameresults.disabled = false
                             break
-                        case 'authenticateuser':
+                        case 'authenticate-user':
                             this.authenticateuser.previousscreen = 'entrance'
                             this.authenticateuser.username = ''
                             this.authenticateuser.password = ''
@@ -277,7 +277,7 @@ var app = new Vue({
                     this.showScreen(arg)
                     break
         
-                case 'invalidcredentials':
+                case 'invalid-credentials':
                     this.showError('Invalid Credentials', this.screen)
                     break
         
@@ -329,7 +329,7 @@ var app = new Vue({
                     }
                     break
         
-                case 'hostshowquestion':
+                case 'host-show-question':
                     try {
                         this.hostshowquestion.data = JSON.parse(arg)
         

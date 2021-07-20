@@ -17,39 +17,39 @@ A Kahoot clone with a UI based on [Ethan Brimhall's kahoot-clone-nodejs](https:/
 * *host clicks on host a game*
 * host → server: host-game
 * server → host: all-quizzes [{"id":1,"name":"Quiz 1"},{"id":2,"name":"Quiz 2"}]
-* server → host: screen hostselectquiz
-* host → server: hostgamelobby 1
+* server → host: screen host-select-quiz
+* host → server: host-game-lobby 1
 * server → host: lobby-game-metadata {"id":1,"name":"Quiz 1","pin":1234}
-* server → host: screen hostgamelobby
+* server → host: screen host-game-lobby
 * server → host: participants-list ["user1", "user2", "user3"]
 * host → server: start-game
-* server → host: hostshowquestion {"questionindex":0, "timeleft":30, "answered":0, "totalplayers":5, "question":"What did I eat for breakfast?", "answers":["answer 0", "answer 1", "answer 2", "answer 3"], "votes":[0,0,0,0]}
-* server → host: screen hostshowquestion
+* server → host: host-show-question {"questionindex":0, "timeleft":30, "answered":0, "totalplayers":5, "question":"What did I eat for breakfast?", "answers":["answer 0", "answer 1", "answer 2", "answer 3"], "votes":[0,0,0,0]}
+* server → host: screen host-show-question
 * server → host: players-answered {"answered": 2, "totalplayers": 10, "votes":[0,0,0,0]}
 * server → host: players-answered {"answered": 3, "totalplayers": 10, "votes":[0,0,0,0]}
 * *time runs out, stop timer, enable show results button*
 * host → server: show-results
 * server → host: question-results {"questionindex":0, "question":"What did I eat for breakfast?", "answers":["answer 0", "answer 1", "answer 2", "answer 3"], "correct": 0, "votes":[1,2,3,3], "totalvotes": 9}
-* server → host: screen hostshowresults
+* server → host: screen host-show-results
 * host → server: next-question
-* server → host: hostshowquestion {"questionindex":1, "timeleft":30, "answered":0, "totalplayers":5, "question":"What did I eat for lunch?", "answers":["answer 0", "answer 1", "answer 2", "answer 3"]}
-* server → host: screen hostshowquestion
+* server → host: host-show-question {"questionindex":1, "timeleft":30, "answered":0, "totalplayers":5, "question":"What did I eat for lunch?", "answers":["answer 0", "answer 1", "answer 2", "answer 3"]}
+* server → host: screen host-show-question
 * server → host: players-answered {"answered": 10, "total": 10}
 * server → host: stop-timer
 * *enable show results button*
 * host → server: show-results
 * host → server: question-results {"questionindex":1, "question":"What did I eat for lunch?", "answers":["answer 0", "answer 1", "answer 2", "answer 3"], "correct": 0, "votes":[1,2,3,4], "totalvotes": 10}
-* server → host: screen hostshowresults
+* server → host: screen host-show-results
 * host → server: next-question
 * server → host: show-winners [{"name": "user1", "score": 500}, {"name": "user2", "score": 300}, {"name": "user3", "score": 200}]
-* server → host: screen hostshowgameresults
+* server → host: screen host-show-game-results
 * host → server: delete-game
 * server → host: all-quizzes [{"id":1,"name":"Quiz 1"},{"id":2,"name":"Quiz 2"}]
-* server → host: screen hostselectquiz
+* server → host: screen host-select-quiz
 
 Other messages:
 
-* host → server: query-host-results - sent when the host reconnects while his state is in the hostshowresults screen
+* host → server: query-host-results - sent when the host reconnects while his state is in the host-show-results screen
 
 
 ## Player Messages
@@ -58,14 +58,14 @@ Other messages:
 * player → server: session SESSION-ID
 * server → player: screen entrance
 * player → server: join-game {"pin": 1234, "name": "user1"}
-* server → player: screen waitforgamestart
+* server → player: screen wait-for-game-start
 * server → player: display-choices 4
-* server → player: screen answerquestion
+* server → player: screen answer-question
 * player → server: answer 2
-* server → player: screen waitforquestionend
+* server → player: screen wait-for-question-end
 * server → player: player-results {"correct": true, "score": 180}
-* server → player: screen displayplayerresults
-* server → player: screen answerquestion
+* server → player: screen display-player-results
+* server → player: screen answer-question
 * *player does not answer the question*
 * server → player: player-results {"correct": false, "score": 180}
 * *the game ends*
@@ -73,18 +73,18 @@ Other messages:
 
 Other messages:
 
-* player → server: query-display-choices - sent when the player reconnects while his state is in the answerquestion screen
-* player → server: query-player-results - sent when the player reconnects while his state is in the displayplayerresults screen
+* player → server: query-display-choices - sent when the player reconnects while his state is in the answer-question screen
+* player → server: query-player-results - sent when the player reconnects while his state is in the display-player-results screen
 
 
 ## Host Authentication Messages
 
 * host → server: host-game
 * *server checks host's session and finds that the Admin flag is false*
-* server → host: screen authenticateuser
+* server → host: screen authenticate-user
 * *host enters invalid credentials*
-* host → server: adminlogin BASE64ENCODEDCREDENTIALS
-* server → host: invalidcredentials
+* host → server: admin-login BASE64ENCODEDCREDENTIALS
+* server → host: invalid-credentials
 * *host enters valid credentials*
-* host → server: adminlogin BASE64ENCODEDCREDENTIALS
-* server → host: screen hostselectquiz
+* host → server: admin-login BASE64ENCODEDCREDENTIALS
+* server → host: screen host-select-quiz

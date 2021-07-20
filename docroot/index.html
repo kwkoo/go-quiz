@@ -40,30 +40,30 @@
     </div>
 
 
-    <div v-show="screen === 'waitforgamestart'">
+    <div v-show="screen === 'wait-for-game-start'">
       <h2 class="title">Waiting for game to start...</h2>
       <div class="center"><img src="images/ajax-loader.gif"></div>
     </div>
 
 
-    <div v-show="screen === 'answerquestion'">
+    <div v-show="screen === 'answer-question'">
       <button class="answerbutton" :disabled='answerquestion.disabled' v-for="n in answerquestion.answercount" v-bind:class="{ option0: n==1, option1: n==2, option2: n==3, option3: n==4 }" v-bind:style="{ height: (window.height / 2) + 'px' }" v-on:click="sendAnswer(n-1)"></button>
     </div>
 
 
-    <div v-show="screen === 'waitforquestionend'">
+    <div v-show="screen === 'wait-for-question-end'">
       <h2 class="title">Waiting for all players to answer...</h2>
       <div class="center"><img src="images/ajax-loader.gif"></div>
     </div>
 
 
-    <div v-show="screen === 'displayplayerresults'">
+    <div v-show="screen === 'display-player-results'">
       <h4 class="score">Score: {{ displayplayerresults.data.score }}</h4>
       <h2 class="playerresult">{{ displayplayerresults.data.correct?'Correct!':'Incorrect' }}</h2>
     </div>
 
 
-    <div v-show="screen === 'authenticateuser'">
+    <div v-show="screen === 'authenticate-user'">
       <h1 class="title">Admin Authentication</h1>
       <div>
         <label class="label">Username</label>
@@ -84,7 +84,7 @@
 
     <!-- Host Screens -->
 
-    <div v-show="screen === 'hostselectquiz'">
+    <div v-show="screen === 'host-select-quiz'">
       <button class="transparent" v-on:click="sendHostBackToStart">Back</button>
       <h1 class="title">Start a Game</h1>
       <h4 class="subtitle">Choose a game below or create your own!</h4><!-- todo: put a link to creator here -->
@@ -97,7 +97,7 @@
     </div>
 
 
-    <div v-show="screen === 'hostgamelobby'">
+    <div v-show="screen === 'host-game-lobby'">
       <button class="transparent" v-on:click="cancelGame">Cancel Game</button>
       <br/>
       <div class="center"></canvas></div>
@@ -114,7 +114,7 @@
     </div>
 
 
-    <div v-show="screen === 'hostshowquestion'">
+    <div v-show="screen === 'host-show-question'">
       <h4 class="questionheader">Question {{ hostshowquestion.data.questionindex + 1 }} / {{ hostshowquestion.data.totalquestions }}</h4>
       <h4 class="questionheader">Players Answered: {{ hostshowquestion.data.answered }} / {{ hostshowquestion.data.totalplayers }}</h4>
       <h3 class="questionsubheader">Time Left: {{ hostshowquestion.data.timeleft }}</h3>
@@ -134,7 +134,7 @@
     </div>
 
 
-    <div v-show="screen === 'hostshowresults'">
+    <div v-show="screen === 'host-show-results'">
       <h4 class="questionheader">Question {{ hostshowresults.data.questionindex + 1 }} / {{ hostshowresults.data.totalquestions }}</h4>
 
       <div class="columns">
@@ -161,7 +161,7 @@
     </div>
 
 
-    <div v-show="screen === 'hostshowgameresults'">
+    <div v-show="screen === 'host-show-game-results'">
       <h2 class="winnertitle">Top Players</h2>
       <h3 class="winner" v-for="(p, index) in hostshowgameresults.data">{{ index + 1 }}. {{ p.name }} - {{ p.score }}</h3>
       <button class="button" :disabled="hostshowgameresults.disabled" v-on:click="deleteGame">Delete Game</button>
