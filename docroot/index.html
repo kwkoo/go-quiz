@@ -21,21 +21,23 @@
 
     <div v-show="screen === 'entrance'">
       <h1 class="title">Join a Game</h1>
-      <div>
-        <label class="label">Name</label>
-        <input ref="playername" class="forminput" v-model="entrance.data.name">
-      </div>
-      <br>
-      <div>
-        <label class="label">Game Pin</label>
-        <input class="forminput" v-model.number="entrance.data.pin" type="number">
-      </div>
-      <br>
-      <div>
-        <button class="button" :disabled='entrance.disabled' v-on:click="joinGame">Join</button>
-      </div>
+      <form v-on:submit.prevent>
+        <div>
+          <label class="label">Name</label>
+          <input ref="playername" class="forminput" v-model="entrance.data.name">
+        </div>
+        <br>
+        <div>
+          <label class="label">Game Pin</label>
+          <input class="forminput" v-model.number="entrance.data.pin" type="number">
+        </div>
+        <br>
+        <div>
+          <button class="button" :disabled='entrance.disabled' v-on:click="joinGame">Join</button>
+        </div>
+      </form>
       <div class="center">
-        <button class="transparent" v-on:click="hostGame">Click here to host a game</button>
+        <button class="transparent" v-on:click="hostGame" type="submit">Click here to host a game</button>
       </div>
     </div>
 
@@ -65,20 +67,22 @@
 
     <div v-show="screen === 'authenticate-user'">
       <h1 class="title">Admin Authentication</h1>
-      <div>
-        <label class="label">Username</label>
-        <input ref="adminname" class="forminput" v-model="authenticateuser.username">
-      </div>
-      <br>
-      <div>
-        <label class="label">Password</label>
-        <input class="forminput" v-model="authenticateuser.password" type="password">
-      </div>
-      <br>
-      <div class="center">
-        <button class="buttonauth" v-on:click="cancelAuthentication">Cancel</button>
-        <button class="buttonauth" v-on:click="adminLogin" :disabled='authenticateuser.username == "" || authenticateuser.password == ""'>Login</button>
-      </div>
+      <form v-on:submit.prevent>
+        <div>
+          <label class="label">Username</label>
+          <input ref="adminname" class="forminput" v-model="authenticateuser.username">
+        </div>
+        <br>
+        <div>
+          <label class="label">Password</label>
+          <input class="forminput" v-model="authenticateuser.password" type="password">
+        </div>
+        <br>
+        <div class="center">
+          <button class="buttonauth" v-on:click="cancelAuthentication" type="button">Cancel</button>
+          <button class="buttonauth" v-on:click="adminLogin" :disabled='authenticateuser.username == "" || authenticateuser.password == ""' type="submit">Login</button>
+        </div>
+      </form>
     </div>
 
 
@@ -173,7 +177,7 @@
 
     <div v-show="screen === 'error'">
       <h2 class="subtitle">{{ error.message }}</h2>
-      <button class="button" :disabled="error.disabled" v-show="(error.next != null) && (error.next.length > 0)" v-on:click="dismissError">OK</button>
+      <button ref="errorok" class="button" :disabled="error.disabled" v-show="(error.next != null) && (error.next.length > 0)" v-on:click="dismissError">OK</button>
     </div>
 
 

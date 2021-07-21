@@ -49,6 +49,8 @@ var app = new Vue({
         },
 
         showScreen: function(target) {
+            this.screen = target
+
             switch (target) {
                 case 'start':
                     this.setupConn()
@@ -64,7 +66,6 @@ var app = new Vue({
                     this.hostselectquiz.disabled = false
                     break
             }
-            this.screen = target
         },
 
         setupConn: function() {
@@ -116,8 +117,11 @@ var app = new Vue({
         showError: function(message, next) {
             this.error.disabled = false
             this.error.message = message
-            if (next) {
+            if (next && next != '') {
                 this.error.next = next
+                this.$nextTick(() => this.$refs.errorok.focus())
+            } else {
+                this.error.next = null
             }
             this.showScreen('error')
         },
@@ -148,7 +152,7 @@ var app = new Vue({
 
         joinGame: function() {
             if (this.entrance.data.name.length == 0) {
-                this.showError('Please fill in the name field', this.screen)
+                this.showError('Please fill in the name field', 'entrance')
                 return
             }
             console.log('sending command to join game')

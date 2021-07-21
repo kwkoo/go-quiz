@@ -26,12 +26,14 @@ var app = new Vue({
     methods: {
 
         showScreen: function(screen) {
+            this.screen = screen
             if (screen == 'start') {
                 this.loadQuizzes()
                 this.loadGames()
                 this.loadSessions()
+            } else if (screen == 'message') {
+                this.$nextTick(() => this.$refs.messageok.focus())
             }
-            this.screen = screen
         },
 
         loadQuizzes: function() {
