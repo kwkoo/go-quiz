@@ -46,6 +46,8 @@ metadata:
   creationTimestamp: null
   labels:
     app: redis
+    app.kubernetes.io/part-of: quiz
+    app.openshift.io/runtime: redis
   name: redis
 spec:
   replicas: 1
@@ -104,8 +106,12 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   creationTimestamp: null
+  annotations:
+    app.openshift.io/connects-to: '[{"apiVersion":"apps/v1","kind":"Deployment","name":"redis"}]'
   labels:
     app: quiz
+    app.kubernetes.io/part-of: quiz
+    app.openshift.io/runtime: golang
   name: quiz
 spec:
   replicas: 1
