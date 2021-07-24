@@ -20,6 +20,7 @@ var app = new Vue({
     },
 
     mounted: function() {
+        this.resetUpload()
         this.showScreen('start')
     },
 
@@ -102,7 +103,13 @@ var app = new Vue({
             })
         },
 
+        resetUpload: function() {
+            this.$refs.quizUpload.value = ''
+        },
+
         uploadQuiz: function(event) {
+            if (event.target.files.length == 0) return
+
             // copied from https://stackoverflow.com/a/59711776
             let reader = new FileReader()
             reader.readAsDataURL(event.target.files[0])
@@ -115,6 +122,7 @@ var app = new Vue({
                 }
                 let index = docs.base64.indexOf(';base64,')
                 if (index == -1) {
+                    this.resetUpload()
                     this.showMessage('could not decode file', 'start')
                     return
                 }
@@ -134,11 +142,11 @@ var app = new Vue({
                         } catch (err) {
                             that.showMessage(err, '')
                         }
+                        that.resetUpload()
                     })
                 } catch (err) {
+                    this.resetUpload()
                     this.showMessage('could not process file: ' + err, 'start')
-                } finally {
-                    this.$refs.quizUpload.value = ''
                 }
             }
         },

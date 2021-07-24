@@ -32,8 +32,17 @@
         <br><br>
         <button class="button" v-on:click="newQuiz()">New Quiz</button>
         <br>
-        <span class="subtitle">Import Quiz</span>
-        <input type="file" ref="quizUpload" v-on:change="uploadQuiz($event)">
+        <!-- from https://www.digitalocean.com/community/tutorials/how-to-handle-file-uploads-in-vue-2 -->
+        <form enctype="multipart/form-data" novalidate>
+          <div class="uploadDropbox">
+            <input type="file" ref="quizUpload" v-on:change="uploadQuiz($event)" accept="application/json" class="input-file">
+            <p>
+              Drag your file here to import quiz
+              <br>
+              or click to browse
+            </p>
+          </div>
+        </form>
       </div>
       <br><br>
 
