@@ -102,6 +102,47 @@ var app = new Vue({
             })
         },
 
+        uploadQuiz: function(event) {
+            // copied from https://stackoverflow.com/a/59711776
+            let reader = new FileReader()
+            reader.readAsDataURL(event.target.files[0])
+            reader.onload = () => {
+                const docs = {
+                    name: event.target.files[0].name,
+                    size: event.target.files[0].size,
+                    lastModifiedDate: event.target.files[0].lastModifiedDate,
+                    base64: reader.result
+                }
+                let index = docs.base64.indexOf(';base64,')
+                if (index == -1) {
+                    this.showMessage('could not decode file', 'start')
+                    return
+                }
+                index += ';base64,'.length
+                try {
+                    let decoded = atob(docs.base64.substring(index))
+                    let data = JSON.parse(decoded)
+                    let that = this
+                    this.webRequest('PUT', '/api/quiz', data, function(resp) {
+                        try {
+                            let data = JSON.parse(resp)
+                            if (data.success) {
+                                that.showMessage('Quiz imported', 'start')
+                            } else {
+                                that.showMessage(data.error, '')
+                            }
+                        } catch (err) {
+                            that.showMessage(err, '')
+                        }
+                    })
+                } catch (err) {
+                    this.showMessage('could not process file: ' + err, 'start')
+                } finally {
+                    this.$refs.quizUpload.value = ''
+                }
+            }
+        },
+
         deleteGame: function(pin) {
             let that = this
             this.webRequest('DELETE', '/api/game/' + pin, null, function(resp) {

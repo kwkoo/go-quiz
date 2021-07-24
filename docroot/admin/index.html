@@ -31,6 +31,9 @@
         </table>
         <br><br>
         <button class="button" v-on:click="newQuiz()">New Quiz</button>
+        <br>
+        <span class="subtitle">Import Quiz</span>
+        <input type="file" ref="quizUpload" v-on:change="uploadQuiz($event)">
       </div>
       <br><br>
 
