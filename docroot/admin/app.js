@@ -69,6 +69,23 @@ var app = new Vue({
             })
         },
 
+        editQuiz: function(index) {
+            let copy = JSON.parse(JSON.stringify(this.list.quizzes[index]))
+
+            // ensure that there are 4 answers for every question
+            copy.questions.forEach(function (question, index) {
+                while (question.answers.length < 4) {
+                    question.answers.push('')
+                }
+            })
+            this.quiz = copy
+            this.showScreen('creator')
+        },
+
+        exportQuiz: function(index) {
+            this.exportObject(this.list.quizzes[index], 'quiz.json')
+        },
+
         deleteQuiz: function(id) {
             let that = this
             this.webRequest('DELETE', '/api/quiz/' + id, null, function(resp) {
@@ -136,19 +153,6 @@ var app = new Vue({
                     }
                 ]
             }
-            this.showScreen('creator')
-        },
-
-        editQuiz: function(index) {
-            let copy = JSON.parse(JSON.stringify(this.list.quizzes[index]))
-
-            // ensure that there are 4 answers for every question
-            copy.questions.forEach(function (question, index) {
-                while (question.answers.length < 4) {
-                    question.answers.push('')
-                }
-            })
-            this.quiz = copy
             this.showScreen('creator')
         },
 
@@ -255,6 +259,25 @@ var app = new Vue({
             } else {
                 xhr.setRequestHeader('Content-Type', 'application/json;charset=UTF-8')
                 xhr.send(JSON.stringify(body))
+            }
+        },
+
+        exportObject: function(obj, filename) {
+            // copied from https://stackoverflow.com/a/30832210
+            let file = new Blob([JSON.stringify(obj)], {type: 'application/json'})
+            if (window.navigator.msSaveOrOpenBlob) // IE10+
+                window.navigator.msSaveOrOpenBlob(file, filename)
+            else { // others
+                let a = document.createElement('a')
+                let url = URL.createObjectURL(file)
+                a.href = url;
+                a.download = filename
+                document.body.appendChild(a)
+                a.click()
+                setTimeout(function() {
+                    document.body.removeChild(a)
+                    window.URL.revokeObjectURL(url)
+                }, 0)
             }
         },
     }

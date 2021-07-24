@@ -19,12 +19,16 @@
       <div v-show="list.quizzes == null" class="center"><img src="/images/ajax-loader.gif"></div>
       <div v-show="list.quizzes != null" class="box">
         <h2 class="subtitle">All Quizzes</h2>
-        <div v-show="list.quizzes != null" v-for="(quiz, index) in list.quizzes" class="center">
-          <div class="spaced">
-            <button class="subtitle" v-on:click="editQuiz(index)">{{ quiz.name }}</button>
-            <button v-on:click="deleteQuiz(quiz.id)">&#10060;</button>
-          </div>
-        </div>
+        <table v-show="list.quizzes != null">
+          <tr><th>Name</th><th>Export</th><th>Delete</th></tr>
+          <template v-for="(quiz, index) in list.quizzes" class="center">
+            <tr>
+              <td><button class="subtitle" v-on:click="editQuiz(index)">{{ quiz.name }}</button></td>
+              <td><button v-on:click="exportQuiz(index)">&#11015;</button></td>
+              <td><button v-on:click="deleteQuiz(quiz.id)">&#10060;</button></td>
+            </tr>
+          </template>
+        </table>
         <br><br>
         <button class="button" v-on:click="newQuiz()">New Quiz</button>
       </div>
@@ -34,7 +38,7 @@
       <div v-show="list.games != null" class="box">
         <h2 class="subtitle">All Games</h2>
         <table v-show="list.games != null">
-          <tr><th style="font-weight: bold;">Pin</th><th>Quiz Name</th><th>Number of Players</th><th>Question Index</th><th>Game State</th><th>Delete</th></tr>
+          <tr><th>Pin</th><th>Quiz Name</th><th>Number of Players</th><th>Question Index</th><th>Game State</th><th>Delete</th></tr>
           <template v-for="(game, index) in list.games" class="center">
             <tr>
               <td><button class="subtitle" v-on:click="editGame(index)">{{ game.pin }}</button></td>

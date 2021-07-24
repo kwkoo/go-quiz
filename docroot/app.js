@@ -219,9 +219,12 @@ var app = new Vue({
         },
 
         saveWinners: function() {
+            this.exportObject(this.hostshowgameresults.data, 'winners.json')
+        },
+
+        exportObject: function(obj, filename) {
             // copied from https://stackoverflow.com/a/30832210
-            let file = new Blob([JSON.stringify(this.hostshowgameresults.data)], {type: 'application/json'})
-            let filename = 'winners.json'
+            let file = new Blob([JSON.stringify(obj)], {type: 'application/json'})
             if (window.navigator.msSaveOrOpenBlob) // IE10+
                 window.navigator.msSaveOrOpenBlob(file, filename)
             else { // others
