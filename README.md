@@ -2,6 +2,12 @@
 
 A Kahoot clone with a UI based on [Ethan Brimhall's kahoot-clone-nodejs](https://github.com/ethanbrimhall/kahoot-clone-nodejs).
 
+Deploy this on OpenShift using `yaml/openshift.yaml`.
+
+The admin credentials are stored in the `quiz` secret.
+
+To access the admin interface, go to the `/admin` endpoint.
+
 
 ## Resources
 
