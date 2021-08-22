@@ -112,7 +112,7 @@
       <br/>
       <h2 class="title">Join this game using the Game Pin:</h2>
       <h1 class="gamepintext">{{ hostgamelobby.data.pin }}</h1>
-      <textarea class="players" readonly>{{ hostgamelobby.textarea }}</textarea>
+      <textarea class="players" rows="10" readonly>{{ hostgamelobby.textarea }}</textarea>
       <br/>
       <button class="start" :disabled='hostgamelobby.disabled' v-on:click="startGame">Start Game</button>
     </div>
@@ -148,7 +148,7 @@
           -->
           <div v-for="(vote, index) in hostshowresults.data.votes" class="square" v-bind:class="{option0: index==0, option1: index==1, option2: index==2, option3: index==3}" v-bind:style="{ height: (vote * 100 / hostshowresults.data.totalplayers) + 'px' }"></div>
         </div>
-        <div>
+        <div class="scorepanel">
           <h3 class="questionsubheader">Top Scorers</h3>
           <template v-for="player in hostshowresults.data.topscorers">
             <div class="questionsubheader">{{ player.name }} - {{ player.score }}</div>
