@@ -58,3 +58,6 @@ importquizzes:
 
 importquizzesocp:
 	@curl -XPUT -u admin:myquizpassword -d @$(BASE)/quizzes.json https://`oc get route/quiz -o jsonpath='{.spec.host}'`/api/quiz/bulk
+
+importquizzesk8s:
+	@curl -XPUT -u admin:myquizpassword -d @$(BASE)/quizzes.json http://`minikube ip`:30080/api/quiz/bulk
