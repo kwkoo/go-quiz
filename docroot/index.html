@@ -61,7 +61,7 @@
 
     <div v-show="screen === 'display-player-results'">
       <h4 class="score">Score: {{ displayplayerresults.data.score }}</h4>
-      <h2 class="playerresult">{{ displayplayerresults.data.correct?'Correct!':'Incorrect' }}</h2>
+      <h2 class="playerresult" v-bind:class="{ answercorrect: displayplayerresults.data.correct, answerincorrect:!displayplayerresults.data.correct }">{{ displayplayerresults.data.correct?'Correct!':'Incorrect' }}</h2>
     </div>
 
 

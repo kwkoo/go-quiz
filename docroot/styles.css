@@ -236,9 +236,16 @@ a {
 
 .playerresult {
     font-family: 'Raleway', sans-serif;
-    color: white;
     text-align: center;
     font-size: 12vw;
+}
+
+.answercorrect {
+    color: green;
+}
+
+.answerincorrect {
+    color: red;
 }
 
 .columns {
