@@ -1,28 +1,25 @@
 body {
-    background-color: turquoise;
+    background-color: black;
+}
+
+.title, .subtitle, .label, .button, .buttonauth {
+    font-family: 'Raleway', sans-serif;
+    text-align: center;
+    color: white;
 }
 
 .title {
-    font-family: 'Raleway', sans-serif;
-    text-align: center;
     font-size: 5vw;
-    /* color: white; */
     clear: right;
 }
 
 .subtitle {
-    /* color: white; */
-    text-align: center;
     font-size: 3vw;
-    font-family: 'Raleway', sans-serif;
 }
 
 .label {
     display: block;
-    text-align: center;
     font-size: 2vw;
-    font-family: 'Raleway', sans-serif;
-    /* color: white; */
 }
 
 .forminput {
@@ -42,7 +39,6 @@ body {
 .button {
     width: 50%;
     background-color: #4CAF50;
-    color: white;
     padding: 14px 20px;
     margin: 8px 0;
     border: none;
@@ -51,16 +47,14 @@ body {
     display: block;
     margin-right: auto;
     margin-left: auto;
-    font-size: 20px;
+    font-size: 2vw;
     background-color: #3A3B3A;
-    font-family: 'Raleway', sans-serif;
 }
 
 /* copy of button with a smaller width */
 .buttonauth {
     width: 40%;
     background-color: #4CAF50;
-    color: white;
     padding: 14px 20px;
     margin: 8px 0;
     border: none;
@@ -69,9 +63,8 @@ body {
     display: block;
     margin-right: auto;
     margin-left: auto;
-    font-size: 20px;
+    font-size: 2vw;
     background-color: #3A3B3A;
-    font-family: 'Raleway', sans-serif;
 }
 
 .center {
@@ -98,7 +91,8 @@ body {
 }
 
 .gamebutton {
-    font-size:40px;
+    font-size: 3vw;
+    color: blue;
 }
 
 .gamebutton:hover {
@@ -107,9 +101,18 @@ body {
 
 .gamepintext {
     text-align: center;
-    /* color: white; */
+    color: white;
     font-family: 'Tajawal', sans-serif;
     font-size: 5vw;
+}
+
+a {
+    color: lightblue;
+}
+
+.outline {
+    outline-color: lightgray;
+    outline-style: solid;
 }
 
 .players {
@@ -143,11 +146,13 @@ body {
 .questionheader {
     font-family: 'Tajawal', sans-serif;
     font-size: 3vw;
+    color: white;
 }
 
 .questionsubheader {
     font-family: 'Raleway', sans-serif;
     font-size: 2vw;
+    color: white;
 }
 
 .answer {
@@ -155,11 +160,12 @@ body {
     padding: 30px 20px;
     height: 50%;
     font-family: 'Raleway', sans-serif;
+    color: white;
     font-size: 1.5vw;
 }
 
 .blockscontainer {
-    height: 100%;
+    height: 150px;
     display: flex;
 }
 
@@ -193,18 +199,27 @@ body {
 .winnertitle {
     text-align: center;
     font-family: 'Raleway', sans-serif;
+    color: white;
     font-size: 8vw;
     color: #3399ff;
 }
 
 .winner {
     font-family: 'Raleway', sans-serif;
+    color: white;
     text-align: center;
     font-size: 5vw;
 }
 
+.answerscreen {
+    width: 100%;
+    height: 50%;
+    margin: 0px 0px;
+}
+
 .answerbutton {
     width: 50%;
+    margin: 0px 0px;
     float: left;
 }
 
@@ -215,11 +230,13 @@ body {
 .score {
     font-family: 'Raleway', sans-serif;
     font-size: 8vw;
+    color: white;
     padding: 0px 10px;
 }
 
 .playerresult {
     font-family: 'Raleway', sans-serif;
+    color: white;
     text-align: center;
     font-size: 12vw;
 }

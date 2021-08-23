@@ -48,7 +48,7 @@
     </div>
 
 
-    <div v-show="screen === 'answer-question'">
+    <div v-show="screen === 'answer-question'" class="answerscreen">
       <button class="answerbutton" :disabled='answerquestion.disabled' v-for="n in answerquestion.answercount" v-bind:class="{ option0: n==1, option1: n==2, option2: n==3, option3: n==4 }" v-bind:style="{ height: (window.height / 2) + 'px' }" v-on:click="sendAnswer(n-1)"></button>
     </div>
 
@@ -104,9 +104,7 @@
     <div v-show="screen === 'host-game-lobby'">
       <button class="transparent" v-on:click="cancelGame">Cancel Game</button>
       <br/>
-      <div class="center"></canvas></div>
-      <br/>
-      <div class="center"><canvas class="center" id="qr"></canvas></div>
+      <div class="center"><canvas class="center outline" id="qr"></canvas></div>
       <br/>
       <div class="center"><a v-bind:href="hostgamelobby.link">{{ hostgamelobby.link }}</a></div>
       <br/>
