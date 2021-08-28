@@ -61,9 +61,10 @@ type Quizzes struct {
 	all    map[int]Quiz
 	mutex  sync.RWMutex
 	engine *PersistenceEngine
+	msghub *MessageHub
 }
 
-func InitQuizzes(engine *PersistenceEngine) (*Quizzes, error) {
+func InitQuizzes(msghub *MessageHub, engine *PersistenceEngine) (*Quizzes, error) {
 	if engine == nil {
 		log.Print("initializing quizzes with no persistence engine")
 		return &Quizzes{all: make(map[int]Quiz)}, nil
@@ -95,7 +96,93 @@ func InitQuizzes(engine *PersistenceEngine) (*Quizzes, error) {
 	return &Quizzes{
 		all:    all,
 		engine: engine,
+		msghub: msghub,
 	}, nil
+}
+
+func (q *Quizzes) Run(shutdownChan chan struct{}) {
+	topic := q.msghub.GetTopic(quizzesTopic)
+	for {
+		select {
+		case <-shutdownChan:
+			q.msghub.NotifyShutdownComplete()
+			return
+		case msg, ok := <-topic:
+			if !ok {
+				log.Print("received empty message from quizzes")
+				continue
+			}
+			if q.processSendQuizzesToClientMessage(msg) {
+				continue
+			}
+			if q.processLookupQuizForGame(msg) {
+				continue
+			}
+		}
+	}
+}
+
+func (q *Quizzes) processLookupQuizForGame(message interface{}) bool {
+	msg, ok := message.(LookupQuizForGameMessage)
+	if !ok {
+		return false
+	}
+
+	quiz, err := q.Get(msg.quizid)
+	if err != nil {
+		q.msghub.Send(sessionsTopic, ErrorToSessionMessage{
+			sessionid:  msg.sessionid,
+			message:    "error getting quiz in new game: " + err.Error(),
+			nextscreen: "host-select-quiz",
+		})
+		return true
+	}
+
+	q.msghub.Send(gamesTopic, SetQuizForGameMessage{
+		pin:  msg.pin,
+		quiz: quiz,
+	})
+
+	q.msghub.Send(sessionsTopic, SessionToScreenMessage{
+		sessionid:  msg.sessionid,
+		nextscreen: "host-game-lobby",
+	})
+
+	return true
+}
+
+func (q *Quizzes) processSendQuizzesToClientMessage(message interface{}) bool {
+	msg, ok := message.(SendQuizzesToClientMessage)
+	if !ok {
+		return false
+	}
+
+	type quizMeta struct {
+		Id   int    `json:"id"`
+		Name string `json:"name"`
+	}
+	ml := []quizMeta{}
+	for _, quiz := range q.GetQuizzes() {
+		ml = append(ml, quizMeta{
+			Id:   quiz.Id,
+			Name: quiz.Name,
+		})
+	}
+
+	encoded, err := convertToJSON(&ml)
+	if err != nil {
+		q.msghub.Send(sessionsTopic, ErrorToSessionMessage{
+			sessionid:  msg.sessionid,
+			message:    fmt.Sprintf("error encoding json: %v", err),
+			nextscreen: "host-select-quiz",
+		})
+		return true
+	}
+	q.msghub.Send(clientHubTopic, ClientMessage{
+		client:  msg.client,
+		message: "all-quizzes " + encoded,
+	})
+	return true
 }
 
 func (q *Quizzes) GetQuizzes() []Quiz {
