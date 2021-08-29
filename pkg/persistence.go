@@ -15,7 +15,7 @@ type PersistenceEngine struct {
 // Redis helper functions
 // Copied from https://github.com/pete911/examples-redigo
 
-func InitRedis(redisHost, redisPassword string, shutdownArtifacts *ShutdownArtifacts) *PersistenceEngine {
+func InitRedis(redisHost, redisPassword string, msghub *MessageHub) *PersistenceEngine {
 	// init redis connection pool
 	// copied from https://github.com/pete911/examples-redigo
 	pool := redis.Pool{
@@ -44,13 +44,12 @@ func InitRedis(redisHost, redisPassword string, shutdownArtifacts *ShutdownArtif
 		},
 	}
 
-	shutdownArtifacts.Wg.Add(1)
-	go func() {
-		<-shutdownArtifacts.Ch
+	go func(shutdownChan chan struct{}) {
+		<-shutdownChan
 		pool.Close()
 		log.Print("persistence engine graceful shutdown")
-		shutdownArtifacts.Wg.Done()
-	}()
+		msghub.NotifyShutdownComplete()
+	}(msghub.GetShutdownChan())
 
 	return &PersistenceEngine{pool: &pool}
 }

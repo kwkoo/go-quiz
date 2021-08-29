@@ -36,11 +36,26 @@ type Hub struct {
 }
 
 func NewHub(msghub *MessageHub, redisHost, redisPassword string, auth *Auth, sessionTimeout int) *Hub {
-	persistenceEngine := InitRedis(redisHost, redisPassword, GetShutdownArtifacts())
+	persistenceEngine := InitRedis(redisHost, redisPassword, msghub)
 	quizzes, err := InitQuizzes(msghub, persistenceEngine)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	sessions := InitSessions(msghub, persistenceEngine, auth, sessionTimeout)
+	games := InitGames(msghub, persistenceEngine)
+
+	go func() {
+		quizzes.Run()
+	}()
+
+	go func() {
+		sessions.Run()
+	}()
+
+	go func() {
+		games.Run()
+	}()
 
 	return &Hub{
 		incomingcommands: make(chan *ClientCommand),
@@ -48,27 +63,47 @@ func NewHub(msghub *MessageHub, redisHost, redisPassword string, auth *Auth, ses
 		unregister:       make(chan *Client),
 		clients:          make(map[*Client]bool),
 		msghub:           msghub,
-		sessions:         InitSessions(msghub, persistenceEngine, auth, sessionTimeout, GetShutdownArtifacts()),
+		sessions:         sessions,
 		quizzes:          quizzes,
-		games:            InitGames(msghub, persistenceEngine),
+		games:            games,
 	}
 }
 
-func (h *Hub) Run() { // todo: accept shutdownChan as arg
+func (h *Hub) Run() {
+	shutdownChan := h.msghub.GetShutdownChan()
+	clientHub := h.msghub.GetTopic(clientHubTopic)
+
 	for {
 		select {
+		case <-shutdownChan:
+			log.Print("websockethub received shutdown signal, exiting")
+			h.msghub.NotifyShutdownComplete()
+			return
+
 		case client := <-h.register:
 			h.clients[client] = true
+
 		case client := <-h.unregister:
 			h.deregisterClient(client)
+
 		case message := <-h.incomingcommands:
 			log.Printf("incoming command: %s, arg: %s", message.cmd, message.arg)
 			h.processMessage(message)
 
-			// todo: process messages from client-hub: SetSessionIDForClientMessage, ClientMessage
-			// * ClientErrorMessage - send message to client
-
-			// todo: wait on shutdownChan
+		case msg, ok := <-clientHub:
+			if !ok {
+				log.Print("received empty message from client-hub")
+				continue
+			}
+			if h.processClientMessage(msg) {
+				continue
+			}
+			if h.processClientErrorMessage(msg) {
+				continue
+			}
+			if h.processSetSessionIDForClientMessage(msg) {
+				continue
+			}
 		}
 	}
 }
@@ -81,8 +116,40 @@ func (h *Hub) deregisterClient(client *Client) {
 	close(client.send)
 	if client.sessionid != "" {
 		log.Printf("cleaned up client for session %s", client.sessionid)
-		h.sessions.UpdateClientForSession(client.sessionid, nil)
+
+		h.msghub.Send(sessionsTopic, SetSessionIDForClientMessage{
+			sessionid: client.sessionid,
+			client:    nil,
+		})
 	}
+}
+
+func (h *Hub) processSetSessionIDForClientMessage(message interface{}) bool {
+	msg, ok := message.(SetSessionIDForClientMessage)
+	if !ok {
+		return false
+	}
+
+	msg.client.sessionid = msg.sessionid
+	return true
+}
+
+func (h *Hub) processClientMessage(message interface{}) bool {
+	msg, ok := message.(ClientMessage)
+	if !ok {
+		return false
+	}
+	h.sendMessageToClient(msg.client, msg.message)
+	return true
+}
+
+func (h *Hub) processClientErrorMessage(message interface{}) bool {
+	msg, ok := message.(ClientErrorMessage)
+	if !ok {
+		return false
+	}
+	h.errorMessageToClient(msg.client, msg.message, msg.nextscreen)
+	return true
 }
 
 func (h *Hub) processMessage(m *ClientCommand) {
@@ -91,22 +158,21 @@ func (h *Hub) processMessage(m *ClientCommand) {
 	h.msghub.Send(incomingMessageTopic, m)
 }
 
+// this is only called from the REST API
 func (h *Hub) SendClientsToScreen(sessionids []string, screen string) {
 	for _, id := range sessionids {
-		h.sendSessionToScreen(id, screen)
+		h.msghub.Send(sessionsTopic, SessionToScreenMessage{
+			sessionid:  id,
+			nextscreen: screen,
+		})
 	}
 }
 
+// this is only called from the REST API
 func (h *Hub) RemoveGameFromSessions(sessionids []string) {
-	for _, id := range sessionids {
-		h.sessions.DeregisterGameFromSession(id)
-	}
-}
-
-// todo: code ported to session.processSessionToScreenMessage
-// todo: to be removed
-func (h *Hub) sendSessionToScreen(id, s string) {
-
+	h.msghub.Send(sessionsTopic, DeregisterGameFromSessionsMessage{
+		sessions: sessionids,
+	})
 }
 
 func (h *Hub) sendMessageToClient(c *Client, s string) {

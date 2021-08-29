@@ -37,8 +37,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	pkg.InitShutdownHandler()
-
 	var filesystem http.FileSystem
 	if len(config.Docroot) > 0 {
 		log.Printf("using %s in the file system as the document root", config.Docroot)
@@ -80,15 +78,12 @@ func main() {
 		Addr: fmt.Sprintf(":%d", config.Port),
 	}
 
-	shutdownArtifacts := pkg.GetShutdownArtifacts()
-	shutdownArtifacts.Wg.Add(1)
-
 	go func() {
 		log.Printf("listening on port %v", config.Port)
 		if err := server.ListenAndServe(); err != nil {
 			if err == http.ErrServerClosed {
 				log.Print("web server graceful shutdown")
-				shutdownArtifacts.Wg.Done()
+				mh.NotifyShutdownComplete()
 				return
 			}
 			log.Fatal(err)
@@ -96,12 +91,12 @@ func main() {
 	}()
 
 	go func() {
-		<-shutdownArtifacts.Ch
+		<-mh.GetShutdownChan()
 		log.Print("interrupt signal received, initiaing web server shutdown...")
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		server.Shutdown(ctx)
 	}()
 
-	pkg.WaitForShutdown()
+	mh.WaitForShutdown()
 }

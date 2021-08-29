@@ -7,6 +7,7 @@ type ClientErrorMessage struct {
 	nextscreen string
 }
 
+// this is used in both the client-hub and sessions-hub
 type SetSessionIDForClientMessage struct {
 	client    *Client
 	sessionid string

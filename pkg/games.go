@@ -114,10 +114,10 @@ func (p PlayerScoreList) Less(i, j int) bool { return p[i].Score < p[j].Score }
 func (p PlayerScoreList) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 type Game struct {
-	Pin              int            `json:"pin"`
-	Host             string         `json:"host"`    // session ID of game host
-	Players          map[string]int `json:"players"` // scores of players
-	PlayerNames      map[string]string
+	Pin              int                 `json:"pin"`
+	Host             string              `json:"host"`    // session ID of game host
+	Players          map[string]int      `json:"players"` // scores of players
+	PlayerNames      map[string]string   `json:"playernames"`
 	Quiz             Quiz                `json:"quiz"`
 	QuestionIndex    int                 `json:"questionindex"`    // current question
 	QuestionDeadline time.Time           `json:"questiondeadline"` // answers must come in at this time or before
@@ -150,6 +150,7 @@ func (g *Game) copy() Game {
 		Pin:              g.Pin,
 		Host:             g.Host,
 		Players:          make(map[string]int),
+		PlayerNames:      make(map[string]string),
 		Quiz:             g.Quiz,
 		QuestionIndex:    g.QuestionIndex,
 		QuestionDeadline: g.QuestionDeadline,
@@ -161,6 +162,10 @@ func (g *Game) copy() Game {
 
 	for k, v := range g.Players {
 		target.Players[k] = v
+	}
+
+	for k, v := range g.PlayerNames {
+		target.PlayerNames[k] = v
 	}
 
 	for k := range g.PlayersAnswered {
@@ -229,7 +234,6 @@ func (g *Game) addPlayer(sessionid, name string) bool {
 	// player is new in this game
 	g.Players[sessionid] = 0
 	g.PlayerNames[sessionid] = name
-	log.Printf("added player %s to game %d", sessionid, g.Pin)
 	return true
 }
 
@@ -458,7 +462,8 @@ func InitGames(msghub *MessageHub, engine *PersistenceEngine) *Games {
 	return &games
 }
 
-func (g *Games) Run(shutdownChan chan struct{}) {
+func (g *Games) Run() {
+	shutdownChan := g.msghub.GetShutdownChan()
 	gamesHub := g.msghub.GetTopic(gamesTopic)
 
 	for {
@@ -1228,6 +1233,12 @@ func (g *Games) processAddPlayerToGameMessage(message interface{}) bool {
 		return true
 	}
 
+	g.msghub.Send(sessionsTopic, BindGameToSessionMessage(msg))
+	g.msghub.Send(sessionsTopic, SessionToScreenMessage{
+		sessionid:  msg.sessionid,
+		nextscreen: "wait-for-game-start",
+	})
+
 	// inform game host of new player
 	game, err := g.Get(msg.pin)
 	if err != nil {
@@ -1296,6 +1307,7 @@ func (g *Games) Add(host string) (int, error) {
 	game := Game{
 		Host:            host,
 		Players:         make(map[string]int),
+		PlayerNames:     make(map[string]string),
 		PlayersAnswered: make(map[string]struct{}),
 	}
 

@@ -100,7 +100,8 @@ func InitQuizzes(msghub *MessageHub, engine *PersistenceEngine) (*Quizzes, error
 	}, nil
 }
 
-func (q *Quizzes) Run(shutdownChan chan struct{}) {
+func (q *Quizzes) Run() {
+	shutdownChan := q.msghub.GetShutdownChan()
 	topic := q.msghub.GetTopic(quizzesTopic)
 	for {
 		select {

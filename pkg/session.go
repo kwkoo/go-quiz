@@ -62,7 +62,7 @@ type Sessions struct {
 	sessionTimeout int
 }
 
-func InitSessions(msghub *MessageHub, engine *PersistenceEngine, auth *Auth, sessionTimeout int, shutdownArtifacts *ShutdownArtifacts) *Sessions {
+func InitSessions(msghub *MessageHub, engine *PersistenceEngine, auth *Auth, sessionTimeout int) *Sessions {
 	log.Printf("session timeout set to %d seconds", sessionTimeout)
 
 	sessions := Sessions{
@@ -85,24 +85,24 @@ func InitSessions(msghub *MessageHub, engine *PersistenceEngine, auth *Auth, ses
 		sessions.UpdateClientForSession(key, nil)
 	}
 
-	shutdownArtifacts.Wg.Add(1)
-	go func() {
+	go func(shutdownChan chan struct{}) {
 		for {
 			select {
-			case <-shutdownArtifacts.Ch:
+			case <-shutdownChan:
 				log.Printf("shutting down session reaper")
-				shutdownArtifacts.Wg.Done()
+				msghub.NotifyShutdownComplete()
 				return
 			case <-time.After(reaperInterval * time.Second):
 				sessions.expireSessions()
 			}
 		}
-	}()
+	}(msghub.GetShutdownChan())
 
 	return &sessions
 }
 
-func (s *Sessions) Run(shutdownChan chan interface{}) {
+func (s *Sessions) Run() {
+	shutdownChan := s.msghub.GetShutdownChan()
 	fromClients := s.msghub.GetTopic(incomingMessageTopic)
 	sessionsHub := s.msghub.GetTopic(sessionsTopic)
 
@@ -142,11 +142,24 @@ func (s *Sessions) Run(shutdownChan chan interface{}) {
 			if s.processDeregisterGameFromSessionsMessage(msg) {
 				continue
 			}
+			if s.processSetSessionIDForClientMessage(msg) {
+				continue
+			}
 		case <-shutdownChan:
 			s.msghub.NotifyShutdownComplete()
 			return
 		}
 	}
+}
+
+func (s *Sessions) processSetSessionIDForClientMessage(message interface{}) bool {
+	msg, ok := message.(SetSessionIDForClientMessage)
+	if !ok {
+		return false
+	}
+
+	s.UpdateClientForSession(msg.sessionid, msg.client)
+	return true
 }
 
 func (s *Sessions) processDeregisterGameFromSessionsMessage(message interface{}) bool {
@@ -207,6 +220,7 @@ func (s *Sessions) processSessionToScreenMessage(message interface{}) bool {
 	session := s.GetSession(msg.sessionid)
 	if session == nil {
 		// session doesn't exist
+		log.Print("*** session doesn't exist")
 		return true
 	}
 
@@ -303,7 +317,7 @@ func (s *Sessions) processClientCommand(msg interface{}) bool {
 		return false
 	}
 
-	if len(m.client.sessionid) == 0 {
+	if m.client.sessionid == "" {
 		// client hasn't identified themselves yet
 		if m.cmd == "session" {
 			if len(m.arg) == 0 || len(m.arg) > 64 {
@@ -325,7 +339,7 @@ func (s *Sessions) processClientCommand(msg interface{}) bool {
 
 			session := s.GetSession(sessionid)
 			if session == nil {
-				session = s.NewSession(m.client.sessionid, m.client, "entrance")
+				session = s.NewSession(sessionid, m.client, "entrance")
 			} else {
 				if session.Client != nil {
 					s.msghub.Send(clientHubTopic, ClientErrorMessage{
@@ -426,10 +440,7 @@ func (s *Sessions) processClientCommand(msg interface{}) bool {
 			pin:       pinfo.Pin,
 		})
 
-		s.msghub.Send(sessionsTopic, SessionToScreenMessage{
-			sessionid:  sessionid,
-			nextscreen: "wait-for-game-start",
-		})
+		return true
 
 	case "query-display-choices":
 		// player may have been disconnected - now they need to know how many
@@ -600,6 +611,10 @@ func (s *Sessions) NewSession(id string, client *Client, screen string) *Session
 	s.mutex.Unlock()
 
 	s.persist(session)
+
+	_, ok := s.all[id]
+	log.Printf("*** created session %s %v", id, ok)
+
 	return session
 }
 
