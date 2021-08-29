@@ -8,57 +8,12 @@ import (
 	"log"
 	"sort"
 	"sync"
+
+	"github.com/kwkoo/go-quiz/internal/common"
 )
 
-type QuizQuestion struct {
-	Question string   `json:"question"`
-	Answers  []string `json:"answers"`
-	Correct  int      `json:"correct"`
-}
-
-func (q QuizQuestion) NumAnswers() int {
-	return len(q.Answers)
-}
-
-type Quiz struct {
-	Id               int            `json:"id"`
-	Name             string         `json:"name"`
-	QuestionDuration int            `json:"questionDuration"`
-	Questions        []QuizQuestion `json:"questions"`
-}
-
-func (q Quiz) NumQuestions() int {
-	return len(q.Questions)
-}
-
-func (q Quiz) GetQuestion(i int) (QuizQuestion, error) {
-	if i < 0 || i >= len(q.Questions) {
-		return QuizQuestion{}, fmt.Errorf("%d is an invalid question index", i)
-	}
-	return q.Questions[i], nil
-}
-
-func (q Quiz) marshal() ([]byte, error) {
-	var b bytes.Buffer
-	enc := json.NewEncoder(&b)
-	if err := enc.Encode(q); err != nil {
-		return nil, fmt.Errorf("error converting quiz to JSON: %v", err)
-	}
-	return b.Bytes(), nil
-}
-
-// Ingests a single Quiz object in JSON
-func UnmarshalQuiz(r io.Reader) (Quiz, error) {
-	dec := json.NewDecoder(r)
-	var quiz Quiz
-	if err := dec.Decode(&quiz); err != nil {
-		return Quiz{}, err
-	}
-	return quiz, nil
-}
-
 type Quizzes struct {
-	all    map[int]Quiz
+	all    map[int]common.Quiz
 	mutex  sync.RWMutex
 	engine *PersistenceEngine
 	msghub *MessageHub
@@ -67,7 +22,7 @@ type Quizzes struct {
 func InitQuizzes(msghub *MessageHub, engine *PersistenceEngine) (*Quizzes, error) {
 	if engine == nil {
 		log.Print("initializing quizzes with no persistence engine")
-		return &Quizzes{all: make(map[int]Quiz)}, nil
+		return &Quizzes{all: make(map[int]common.Quiz)}, nil
 	}
 
 	keys, err := engine.GetKeys("quiz")
@@ -75,7 +30,7 @@ func InitQuizzes(msghub *MessageHub, engine *PersistenceEngine) (*Quizzes, error
 		return nil, fmt.Errorf("could not retrieve keys from redis: %v", err)
 	}
 
-	all := make(map[int]Quiz)
+	all := make(map[int]common.Quiz)
 
 	for _, key := range keys {
 		data, err := engine.Get(key)
@@ -84,7 +39,7 @@ func InitQuizzes(msghub *MessageHub, engine *PersistenceEngine) (*Quizzes, error
 			continue
 		}
 		dec := json.NewDecoder(bytes.NewReader(data))
-		var quiz Quiz
+		var quiz common.Quiz
 		if err := dec.Decode(&quiz); err != nil {
 			log.Printf("error parsing JSON from redis for key %s: %v", key, err)
 			continue
@@ -186,7 +141,7 @@ func (q *Quizzes) processSendQuizzesToClientMessage(message interface{}) bool {
 	return true
 }
 
-func (q *Quizzes) GetQuizzes() []Quiz {
+func (q *Quizzes) GetQuizzes() []common.Quiz {
 	q.mutex.RLock()
 	defer q.mutex.RUnlock()
 	ids := make([]int, len(q.all))
@@ -198,19 +153,19 @@ func (q *Quizzes) GetQuizzes() []Quiz {
 	}
 	sort.Ints(ids)
 
-	r := make([]Quiz, len(ids))
+	r := make([]common.Quiz, len(ids))
 	for i, id := range ids {
 		r[i] = q.all[id]
 	}
 	return r
 }
 
-func (q *Quizzes) Get(id int) (Quiz, error) {
+func (q *Quizzes) Get(id int) (common.Quiz, error) {
 	q.mutex.RLock()
 	defer q.mutex.RUnlock()
 	quiz, ok := q.all[id]
 	if !ok {
-		return Quiz{}, fmt.Errorf("could not find quiz with id %d", id)
+		return common.Quiz{}, fmt.Errorf("could not find quiz with id %d", id)
 	}
 	return quiz, nil
 }
@@ -225,20 +180,20 @@ func (q *Quizzes) Delete(id int) {
 	}
 }
 
-func (q *Quizzes) Add(quiz Quiz) (Quiz, error) {
+func (q *Quizzes) Add(quiz common.Quiz) (common.Quiz, error) {
 	var err error
 	quiz.Id, err = q.nextID()
 	if err != nil {
-		return Quiz{}, err
+		return common.Quiz{}, err
 	}
 
 	if q.engine != nil {
-		encoded, err := quiz.marshal()
+		encoded, err := quiz.Marshal()
 		if err != nil {
-			return Quiz{}, fmt.Errorf("error converting quiz to JSON: %v", err)
+			return common.Quiz{}, fmt.Errorf("error converting quiz to JSON: %v", err)
 		}
 		if err := q.engine.Set(fmt.Sprintf("quiz:%d", quiz.Id), encoded, 0); err != nil {
-			return Quiz{}, fmt.Errorf("error persisting quiz to redis: %v", err)
+			return common.Quiz{}, fmt.Errorf("error persisting quiz to redis: %v", err)
 		}
 	}
 
@@ -248,13 +203,13 @@ func (q *Quizzes) Add(quiz Quiz) (Quiz, error) {
 	return quiz, nil
 }
 
-func (q *Quizzes) Update(quiz Quiz) error {
+func (q *Quizzes) Update(quiz common.Quiz) error {
 	q.mutex.Lock()
 	q.all[quiz.Id] = quiz
 	q.mutex.Unlock()
 
 	if q.engine != nil {
-		encoded, err := quiz.marshal()
+		encoded, err := quiz.Marshal()
 		if err != nil {
 			return fmt.Errorf("error converting quiz to JSON: %v", err)
 		}
@@ -285,9 +240,9 @@ func (q *Quizzes) nextID() (int, error) {
 }
 
 // Ingests an array of Quiz objects in JSON
-func UnmarshalQuizzes(r io.Reader) ([]Quiz, error) {
+func UnmarshalQuizzes(r io.Reader) ([]common.Quiz, error) {
 	dec := json.NewDecoder(r)
-	var quizzes []Quiz
+	var quizzes []common.Quiz
 	if err := dec.Decode(&quizzes); err != nil {
 		return nil, err
 	}

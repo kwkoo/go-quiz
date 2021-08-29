@@ -1,5 +1,7 @@
 package internal
 
+import "github.com/kwkoo/go-quiz/internal/common"
+
 type ClientErrorMessage struct {
 	client     *Client
 	sessionid  string
@@ -123,7 +125,7 @@ type LookupQuizForGameMessage struct {
 
 type SetQuizForGameMessage struct {
 	pin  int
-	quiz Quiz
+	quiz common.Quiz
 }
 
 type StartGameMessage struct {

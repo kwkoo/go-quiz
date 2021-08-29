@@ -9,6 +9,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"log"
+
+	"github.com/kwkoo/go-quiz/internal/common"
 )
 
 // Hub maintains the set of active clients and broadcasts messages to the
@@ -204,6 +206,71 @@ func (h *Hub) errorMessageToClient(c *Client, message, nextscreen string) {
 		return
 	}
 	h.sendMessageToClient(c, "error "+encoded)
+}
+
+// used by the REST API
+func (h *Hub) GetQuizzes() []common.Quiz {
+	return h.quizzes.GetQuizzes()
+}
+
+// used by the REST API
+func (h *Hub) GetQuiz(id int) (common.Quiz, error) {
+	return h.quizzes.Get(id)
+}
+
+// used by the REST API
+func (h *Hub) DeleteQuiz(id int) {
+	h.quizzes.Delete(id)
+}
+
+// used by the REST API
+func (h *Hub) AddQuiz(q common.Quiz) (common.Quiz, error) {
+	return h.quizzes.Add(q)
+}
+
+// used by the REST API
+func (h *Hub) UpdateQuiz(q common.Quiz) error {
+	return h.quizzes.Update(q)
+}
+
+// used by the REST API
+func (h *Hub) ExtendSessionExpiry(id string) {
+	h.sessions.ExtendSessionExpiry(id)
+}
+
+// used by the REST API
+func (h *Hub) GetSessions() []common.Session {
+	return h.sessions.GetAll()
+}
+
+// used by the REST API
+func (h *Hub) GetSession(id string) *common.Session {
+	return h.sessions.GetSession(id)
+}
+
+// used by the REST API
+func (h *Hub) DeleteSession(id string) {
+	h.sessions.DeleteSession(id)
+}
+
+// used by the REST API
+func (h *Hub) GetGames() []common.Game {
+	return h.games.GetAll()
+}
+
+// used by the REST API
+func (h *Hub) GetGame(id int) (common.Game, error) {
+	return h.games.Get(id)
+}
+
+// used by the REST API
+func (h *Hub) DeleteGame(id int) {
+	h.games.Delete(id)
+}
+
+// used by the REST API
+func (h *Hub) UpdateGame(g common.Game) error {
+	return h.games.Update(g)
 }
 
 func convertToJSON(input interface{}) (string, error) {

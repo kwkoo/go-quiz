@@ -1,436 +1,26 @@
 package internal
 
 import (
-	"bytes"
 	"crypto/rand"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
-	"sort"
 	"strconv"
 	"sync"
-	"time"
+
+	"github.com/kwkoo/go-quiz/internal/common"
 )
-
-const (
-	// Game states:
-	// * The game starts off as GameNotStarted
-	// * When the host starts the game, the state shifts to QuestionInProgress
-	// * When the time is up or if all players have answered, the state shifts
-	//   to Show Results
-	// * When the host advances to the next question, the state shifts back to
-	//   QuestionInProgress
-	// * When the time is up or if all players have answered, the state shifts
-	//   to Show Results
-	// * After all the questions have been answered and the last result is
-	//   shown, the state shifts to GameEnded - the UI can then show the
-	//   the results of the game (the winners list)
-	// * After that, the game can be deleted
-	//
-	GameNotStarted     = iota
-	QuestionInProgress = iota
-	ShowResults        = iota
-	GameEnded          = iota
-)
-
-const winnerCount = 5
-
-type UnexpectedStateError struct {
-	CurrentState int
-	Err          error
-}
-
-func (e *UnexpectedStateError) Error() string {
-	return fmt.Sprintf("game is in an unexpected state: %v", e.Err)
-}
-
-func NewUnexpectedStateError(state int, message string) *UnexpectedStateError {
-	return &UnexpectedStateError{
-		CurrentState: state,
-		Err:          errors.New(message),
-	}
-}
-
-type NoSuchGameError struct {
-	Pin int
-}
-
-func (e *NoSuchGameError) Error() string {
-	return fmt.Sprintf("game %d does not exist", e.Pin)
-}
-
-func NewNoSuchGameError(pin int) *NoSuchGameError {
-	return &NoSuchGameError{
-		Pin: pin,
-	}
-}
-
-// Queried by the host - either when the host first displays the question or
-// when the host reconnects
-type GameCurrentQuestion struct {
-	QuestionIndex  int      `json:"questionindex"`
-	TimeLeft       int      `json:"timeleft"`
-	Answered       int      `json:"answered"`     // number of players that have answered
-	TotalPlayers   int      `json:"totalplayers"` // number of players in this game
-	Question       string   `json:"question"`
-	Answers        []string `json:"answers"`
-	Votes          []int    `json:"votes"`
-	TotalVotes     int      `json:"totalvotes"`
-	TotalQuestions int      `json:"totalquestions"`
-}
-
-// To be sent to the host when a player answers a question
-type AnswersUpdate struct {
-	AllAnswered  bool  `json:"allanswered"`
-	Answered     int   `json:"answered"`
-	TotalPlayers int   `json:"totalplayers"`
-	Votes        []int `json:"votes"`
-	TotalVotes   int   `json:"totalvotes"`
-}
-
-type QuestionResults struct {
-	QuestionIndex  int           `json:"questionindex"`
-	Question       string        `json:"question"`
-	Answers        []string      `json:"answers"`
-	Correct        int           `json:"correct"`
-	Votes          []int         `json:"votes"`
-	TotalVotes     int           `json:"totalvotes"`
-	TotalQuestions int           `json:"totalquestions"`
-	TotalPlayers   int           `json:"totalplayers"`
-	TopScorers     []PlayerScore `json:"topscorers"`
-}
-
-type PlayerScore struct {
-	id    string
-	Name  string `json:"name"`
-	Score int    `json:"score"`
-}
-
-type PlayerScoreList []PlayerScore
-
-func (p PlayerScoreList) Len() int           { return len(p) }
-func (p PlayerScoreList) Less(i, j int) bool { return p[i].Score < p[j].Score }
-func (p PlayerScoreList) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
-
-type Game struct {
-	Pin              int                 `json:"pin"`
-	Host             string              `json:"host"`    // session ID of game host
-	Players          map[string]int      `json:"players"` // scores of players
-	PlayerNames      map[string]string   `json:"playernames"`
-	Quiz             Quiz                `json:"quiz"`
-	QuestionIndex    int                 `json:"questionindex"`    // current question
-	QuestionDeadline time.Time           `json:"questiondeadline"` // answers must come in at this time or before
-	PlayersAnswered  map[string]struct{} `json:"playersanswered"`
-	CorrectPlayers   map[string]struct{} `json:"correctplayers"` // players that answered current question correctly
-	Votes            []int               `json:"votes"`          // number of players that answered each choice
-	GameState        int                 `json:"gamestate"`
-}
-
-func unmarshalGame(b []byte) (*Game, error) {
-	var game Game
-	dec := json.NewDecoder(bytes.NewReader(b))
-	if err := dec.Decode(&game); err != nil {
-		return nil, err
-	}
-	return &game, nil
-}
-
-func (g *Game) marshal() ([]byte, error) {
-	var b bytes.Buffer
-	enc := json.NewEncoder(&b)
-	if err := enc.Encode(g); err != nil {
-		return nil, err
-	}
-	return b.Bytes(), nil
-}
-
-func (g *Game) copy() Game {
-	target := Game{
-		Pin:              g.Pin,
-		Host:             g.Host,
-		Players:          make(map[string]int),
-		PlayerNames:      make(map[string]string),
-		Quiz:             g.Quiz,
-		QuestionIndex:    g.QuestionIndex,
-		QuestionDeadline: g.QuestionDeadline,
-		PlayersAnswered:  make(map[string]struct{}),
-		CorrectPlayers:   make(map[string]struct{}),
-		Votes:            []int{},
-		GameState:        g.GameState,
-	}
-
-	for k, v := range g.Players {
-		target.Players[k] = v
-	}
-
-	for k, v := range g.PlayerNames {
-		target.PlayerNames[k] = v
-	}
-
-	for k := range g.PlayersAnswered {
-		target.PlayersAnswered[k] = struct{}{}
-	}
-
-	for k := range g.CorrectPlayers {
-		target.CorrectPlayers[k] = struct{}{}
-	}
-
-	copy(target.Votes, g.Votes)
-
-	return target
-}
-
-func (g *Game) setupQuestion(newIndex int) error {
-	g.QuestionIndex = newIndex
-	question, err := g.Quiz.GetQuestion(newIndex)
-	if err != nil {
-		return err
-	}
-	g.GameState = QuestionInProgress
-	g.PlayersAnswered = make(map[string]struct{})
-	g.CorrectPlayers = make(map[string]struct{})
-	g.Votes = make([]int, question.NumAnswers())
-	g.QuestionDeadline = time.Now().Add(time.Second * time.Duration(g.Quiz.QuestionDuration))
-	return nil
-}
-
-func (g *Game) totalVotes() int {
-	total := 0
-	for _, v := range g.Votes {
-		total += v
-	}
-	return total
-}
-
-func (g *Game) getPlayers() []string {
-	players := make([]string, len(g.Players))
-
-	i := 0
-	for player := range g.Players {
-		players[i] = player
-		i++
-	}
-	return players
-}
-
-func (g *Game) getPlayerNames() []string {
-	names := []string{}
-	for _, v := range g.PlayerNames {
-		names = append(names, v)
-	}
-	sort.Strings(names)
-	return names
-}
-
-// Returns true if the player was added - false if the player is already in
-// the game
-func (g *Game) addPlayer(sessionid, name string) bool {
-	if _, ok := g.Players[sessionid]; ok {
-		// player is already in the game
-		return false
-	}
-
-	// player is new in this game
-	g.Players[sessionid] = 0
-	g.PlayerNames[sessionid] = name
-	return true
-}
-
-func (g *Game) setQuiz(quiz Quiz) {
-	g.Quiz = quiz
-}
-
-func (g *Game) deletePlayer(sessionid string) {
-	delete(g.Players, sessionid)
-	delete(g.PlayersAnswered, sessionid)
-	delete(g.CorrectPlayers, sessionid)
-}
-
-func (g *Game) nextState() (int, error) {
-	switch g.GameState {
-	case GameNotStarted:
-		// if there are no questions or players, end the game immediately
-		if g.Quiz.NumQuestions() == 0 || len(g.Players) == 0 {
-			g.GameState = GameEnded
-			return g.GameState, nil
-		}
-		if err := g.setupQuestion(0); err != nil {
-			g.GameState = GameEnded
-			return g.GameState, fmt.Errorf("error trying to start game: %v", err)
-		}
-		return g.GameState, nil
-
-	case QuestionInProgress:
-		g.GameState = ShowResults
-		return g.GameState, nil
-
-	case ShowResults:
-		if g.QuestionIndex < g.Quiz.NumQuestions() {
-			g.QuestionIndex++
-		}
-		if g.QuestionIndex >= g.Quiz.NumQuestions() {
-			g.GameState = GameEnded
-			return g.GameState, nil
-		}
-		if err := g.setupQuestion(g.QuestionIndex); err != nil {
-			g.GameState = GameEnded
-			return g.GameState, err
-		}
-		// setupQuestion() would have set the GameState to QuestionInProgress
-		return g.GameState, nil
-
-	default:
-		g.GameState = GameEnded
-		return g.GameState, nil
-	}
-}
-
-func (g *Game) showResults() error {
-	if g.GameState != QuestionInProgress && g.GameState != ShowResults {
-		return NewUnexpectedStateError(g.GameState, fmt.Sprintf("game with pin %d is not in the expected state", g.Pin))
-	}
-	g.GameState = ShowResults
-	return nil
-}
-
-// Returns true if state was changed
-func (g *Game) getCurrentQuestion() (bool, GameCurrentQuestion, error) {
-	if g.GameState != QuestionInProgress {
-		return false, GameCurrentQuestion{}, NewUnexpectedStateError(g.GameState, fmt.Sprintf("game with pin %d is not showing a live question", g.Pin))
-	}
-
-	now := time.Now()
-	timeLeft := int(g.QuestionDeadline.Unix() - now.Unix())
-	if timeLeft <= 0 || len(g.PlayersAnswered) >= len(g.Players) {
-		g.GameState = ShowResults
-		return true, GameCurrentQuestion{}, NewUnexpectedStateError(ShowResults, fmt.Sprintf("game with pin %d should be showing results", g.Pin))
-	}
-
-	question, err := g.Quiz.GetQuestion(g.QuestionIndex)
-	if err != nil {
-		return false, GameCurrentQuestion{}, err
-	}
-
-	return false, GameCurrentQuestion{
-		QuestionIndex:  g.QuestionIndex,
-		TimeLeft:       timeLeft,
-		Answered:       len(g.PlayersAnswered),
-		TotalPlayers:   len(g.Players),
-		Question:       question.Question,
-		Answers:        question.Answers,
-		Votes:          g.Votes,
-		TotalVotes:     g.totalVotes(),
-		TotalQuestions: g.Quiz.NumQuestions(),
-	}, nil
-}
-
-// Returns true if changed
-func (g *Game) registerAnswer(sessionid string, answerIndex int) (bool, AnswersUpdate, error) {
-	if _, ok := g.Players[sessionid]; !ok {
-		return false, AnswersUpdate{}, fmt.Errorf("player %s is not part of game %d", sessionid, g.Pin)
-	}
-	if g.GameState != QuestionInProgress {
-		return false, AnswersUpdate{}, NewUnexpectedStateError(g.GameState, fmt.Sprintf("game %d is not showing a live question", g.Pin))
-	}
-
-	now := time.Now()
-	if now.After(g.QuestionDeadline) {
-		g.GameState = ShowResults
-		return true, AnswersUpdate{}, NewUnexpectedStateError(ShowResults, fmt.Sprintf("question %d in game %d has expired", g.QuestionIndex, g.Pin))
-	}
-
-	question, err := g.Quiz.GetQuestion(g.QuestionIndex)
-	if err != nil {
-		return false, AnswersUpdate{}, err
-	}
-
-	if answerIndex < 0 || answerIndex >= question.NumAnswers() {
-		return false, AnswersUpdate{}, errors.New("invalid answer")
-	}
-
-	if _, ok := g.PlayersAnswered[sessionid]; !ok {
-		// player hasn't answered yet
-		g.PlayersAnswered[sessionid] = struct{}{}
-
-		if answerIndex == question.Correct {
-			// calculate score, add to player score
-			g.Players[sessionid] += calculateScore(int(g.QuestionDeadline.Unix()-now.Unix()), g.Quiz.QuestionDuration)
-			g.CorrectPlayers[sessionid] = struct{}{}
-		}
-		g.Votes[answerIndex]++
-	}
-
-	answeredCount := len(g.PlayersAnswered)
-	totalPlayers := len(g.Players)
-	allAnswered := answeredCount >= totalPlayers
-	if allAnswered {
-		g.GameState = ShowResults
-	}
-	return true, AnswersUpdate{
-		AllAnswered:  allAnswered,
-		Answered:     answeredCount,
-		TotalPlayers: totalPlayers,
-		Votes:        g.Votes,
-		TotalVotes:   g.totalVotes(),
-	}, nil
-}
-
-func (g *Game) getQuestionResults() (QuestionResults, error) {
-	question, err := g.Quiz.GetQuestion(g.QuestionIndex)
-	if err != nil {
-		return QuestionResults{}, err
-	}
-	results := QuestionResults{
-		QuestionIndex:  g.QuestionIndex,
-		Question:       question.Question,
-		Answers:        question.Answers,
-		Correct:        question.Correct,
-		Votes:          g.Votes,
-		TotalVotes:     g.totalVotes(),
-		TotalQuestions: g.Quiz.NumQuestions(),
-		TotalPlayers:   len(g.Players),
-		TopScorers:     g.getWinners(),
-	}
-
-	return results, nil
-}
-
-func (g *Game) getWinners() []PlayerScore {
-	// copied from https://stackoverflow.com/a/18695740
-	pl := make(PlayerScoreList, len(g.Players))
-	i := 0
-	for k, v := range g.Players {
-		pl[i] = PlayerScore{
-			id:    k,
-			Name:  g.PlayerNames[k],
-			Score: v,
-		}
-		i++
-	}
-	sort.Sort(sort.Reverse(pl))
-
-	max := len(pl)
-	if max > winnerCount {
-		max = winnerCount
-	}
-	return pl[:max]
-}
-
-func (g *Game) getGameState() int {
-	return g.GameState
-}
 
 type Games struct {
 	mutex  sync.RWMutex
-	all    map[int]*Game // map key is the game pin
+	all    map[int]*common.Game // map key is the game pin
 	engine *PersistenceEngine
 	msghub *MessageHub
 }
 
 func InitGames(msghub *MessageHub, engine *PersistenceEngine) *Games {
 	games := Games{
-		all:    make(map[int]*Game),
+		all:    make(map[int]*common.Game),
 		engine: engine,
 		msghub: msghub,
 	}
@@ -451,7 +41,7 @@ func InitGames(msghub *MessageHub, engine *PersistenceEngine) *Games {
 			log.Printf("error trying to retrieve game %s from persistent store: %v", key, err)
 			continue
 		}
-		game, err := unmarshalGame(data)
+		game, err := common.UnmarshalGame(data)
 		if err != nil {
 			log.Printf("error trying to unmarshal game %s from persistent store: %v", key, err)
 			continue
@@ -567,7 +157,7 @@ func (g *Games) processNextQuestionMessage(message interface{}) bool {
 			sessionid: msg.sessionid,
 			pin:       -1,
 		})
-		if _, ok := err.(*NoSuchGameError); ok {
+		if _, ok := err.(*common.NoSuchGameError); ok {
 			g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
 				sessionid:  msg.sessionid,
 				message:    err.Error(),
@@ -583,7 +173,7 @@ func (g *Games) processNextQuestionMessage(message interface{}) bool {
 		return true
 	}
 
-	if gameState == QuestionInProgress {
+	if gameState == common.QuestionInProgress {
 		g.msghub.Send(sessionsTopic, SessionToScreenMessage{
 			sessionid:  msg.sessionid,
 			nextscreen: "host-show-question",
@@ -599,7 +189,7 @@ func (g *Games) processNextQuestionMessage(message interface{}) bool {
 		nextscreen: "host-show-game-results",
 	})
 
-	players := game.getPlayers()
+	players := game.GetPlayers()
 	g.msghub.Send(sessionsTopic, DeregisterGameFromSessionsMessage{
 		sessions: players,
 	})
@@ -624,10 +214,10 @@ func (g *Games) processQueryHostResultsMessage(message interface{}) bool {
 }
 
 // returns ok if successful
-func (g *Games) sendQuestionResultsToHost(client *Client, sessionid string, pin int) (Game, bool) {
+func (g *Games) sendQuestionResultsToHost(client *Client, sessionid string, pin int) (common.Game, bool) {
 	game, ok := g.ensureUserIsGameHost(client, sessionid, pin)
 	if !ok {
-		return Game{}, false
+		return common.Game{}, false
 	}
 
 	if err := g.ShowResults(pin); err != nil {
@@ -636,7 +226,7 @@ func (g *Games) sendQuestionResultsToHost(client *Client, sessionid string, pin 
 			message:    fmt.Sprintf("error moving game to show results state: %v", err),
 			nextscreen: "",
 		})
-		return Game{}, false
+		return common.Game{}, false
 	}
 
 	results, err := g.GetQuestionResults(pin)
@@ -646,7 +236,7 @@ func (g *Games) sendQuestionResultsToHost(client *Client, sessionid string, pin 
 			message:    fmt.Sprintf("error getting question results: %v", err),
 			nextscreen: "",
 		})
-		return Game{}, false
+		return common.Game{}, false
 	}
 
 	encoded, err := convertToJSON(&results)
@@ -656,7 +246,7 @@ func (g *Games) sendQuestionResultsToHost(client *Client, sessionid string, pin 
 			message:    fmt.Sprintf("error converting question results payload to JSON: %v", err),
 			nextscreen: "",
 		})
-		return Game{}, false
+		return common.Game{}, false
 	}
 
 	g.msghub.Send(clientHubTopic, ClientMessage{
@@ -667,7 +257,7 @@ func (g *Games) sendQuestionResultsToHost(client *Client, sessionid string, pin 
 	return game, true
 }
 
-func (g *Games) sendGamePlayersToAnswerQuestionScreen(sessionid string, game Game) {
+func (g *Games) sendGamePlayersToAnswerQuestionScreen(sessionid string, game common.Game) {
 	question, err := game.Quiz.GetQuestion(game.QuestionIndex)
 	if err != nil {
 		g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
@@ -737,7 +327,7 @@ func (g *Games) processShowResultsMessage(message interface{}) bool {
 }
 
 // returns true if successful (treat it as an ok flag)
-func (g *Games) ensureUserIsGameHost(client *Client, sessionid string, pin int) (Game, bool) {
+func (g *Games) ensureUserIsGameHost(client *Client, sessionid string, pin int) (common.Game, bool) {
 	game, err := g.Get(pin)
 	if err != nil {
 		g.msghub.Send(sessionsTopic, SetSessionGamePinMessage{
@@ -745,13 +335,13 @@ func (g *Games) ensureUserIsGameHost(client *Client, sessionid string, pin int) 
 			pin:       -1,
 		})
 
-		if _, ok := err.(*NoSuchGameError); ok {
+		if _, ok := err.(*common.NoSuchGameError); ok {
 			g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
 				sessionid:  sessionid,
 				message:    err.Error(),
 				nextscreen: "entrance",
 			})
-			return Game{}, false
+			return common.Game{}, false
 		}
 
 		g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
@@ -760,7 +350,7 @@ func (g *Games) ensureUserIsGameHost(client *Client, sessionid string, pin int) 
 			nextscreen: "entrance",
 		})
 
-		return Game{}, false
+		return common.Game{}, false
 	}
 
 	if sessionid != game.Host {
@@ -769,7 +359,7 @@ func (g *Games) ensureUserIsGameHost(client *Client, sessionid string, pin int) 
 			message:    "you are not the host of the game",
 			nextscreen: "entrance",
 		})
-		return Game{}, false
+		return common.Game{}, false
 	}
 
 	return game, true
@@ -795,12 +385,12 @@ func (g *Games) processStartGameMessage(message interface{}) bool {
 		})
 		return true
 	}
-	if gameState != QuestionInProgress {
-		if gameState == ShowResults {
+	if gameState != common.QuestionInProgress {
+		if gameState == common.ShowResults {
 			g.msghub.Send(gamesTopic, ShowResultsMessage(msg))
 			return true
 		}
-		if gameState == GameEnded {
+		if gameState == common.GameEnded {
 			g.msghub.Send(sessionsTopic, SessionToScreenMessage{
 				sessionid:  msg.sessionid,
 				nextscreen: "host-select-quiz",
@@ -879,7 +469,7 @@ func (g *Games) processCancelGameMessage(message interface{}) bool {
 		return true
 	}
 
-	players := game.getPlayers()
+	players := game.GetPlayers()
 	players = append(players, game.Host)
 	g.msghub.Send(sessionsTopic, DeregisterGameFromSessionsMessage{
 		sessions: players,
@@ -910,7 +500,7 @@ func (g *Games) processRegisterAnswerMessage(message interface{}) bool {
 			pin:       -1,
 		})
 
-		if _, ok := err.(*NoSuchGameError); ok {
+		if _, ok := err.(*common.NoSuchGameError); ok {
 			g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
 				sessionid:  msg.sessionid,
 				message:    err.Error(),
@@ -919,15 +509,15 @@ func (g *Games) processRegisterAnswerMessage(message interface{}) bool {
 			return true
 		}
 
-		if errState, ok := err.(*UnexpectedStateError); ok {
+		if errState, ok := err.(*common.UnexpectedStateError); ok {
 			switch errState.CurrentState {
-			case GameNotStarted:
+			case common.GameNotStarted:
 				g.msghub.Send(sessionsTopic, SessionToScreenMessage{
 					sessionid:  msg.sessionid,
 					nextscreen: "wait-for-game-start",
 				})
 
-			case ShowResults:
+			case common.ShowResults:
 				g.msghub.Send(sessionsTopic, SessionToScreenMessage{
 					sessionid:  msg.sessionid,
 					nextscreen: "display-player-results",
@@ -995,7 +585,7 @@ func (g *Games) processQueryPlayerResultsMessage(message interface{}) bool {
 			pin:       -1,
 		})
 
-		if _, ok := err.(*NoSuchGameError); ok {
+		if _, ok := err.(*common.NoSuchGameError); ok {
 			g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
 				sessionid:  msg.sessionid,
 				message:    err.Error(),
@@ -1065,7 +655,7 @@ func (g *Games) processQueryDisplayChoicesMessage(message interface{}) bool {
 			pin:       -1,
 		})
 
-		if _, ok := err.(*NoSuchGameError); ok {
+		if _, ok := err.(*common.NoSuchGameError); ok {
 			g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
 				sessionid:  msg.sessionid,
 				message:    err.Error(),
@@ -1137,8 +727,8 @@ func (g *Games) processHostShowQuestionMessage(message interface{}) bool {
 		// if the host disconnected while the question was live, and if
 		// the game state has now changed, we may need to move the host to
 		// the relevant screen
-		unexpectedState, ok := err.(*UnexpectedStateError)
-		if ok && unexpectedState.CurrentState == ShowResults {
+		unexpectedState, ok := err.(*common.UnexpectedStateError)
+		if ok && unexpectedState.CurrentState == common.ShowResults {
 			g.msghub.Send(sessionsTopic, SessionToScreenMessage{
 				sessionid:  msg.sessionid,
 				nextscreen: "show-results",
@@ -1197,7 +787,7 @@ func (g *Games) processSendGameMetadataMessage(message interface{}) bool {
 		Pin:     game.Pin,
 		Name:    game.Quiz.Name,
 		Host:    game.Host,
-		Players: game.getPlayerNames(),
+		Players: game.GetPlayerNames(),
 	}
 
 	encoded, err := convertToJSON(&gameMetadata)
@@ -1249,7 +839,7 @@ func (g *Games) processAddPlayerToGameMessage(message interface{}) bool {
 	if host == "" {
 		return true
 	}
-	players := game.getPlayerNames()
+	players := game.GetPlayerNames()
 	encoded, err := convertToJSON(&players)
 
 	if err != nil {
@@ -1265,11 +855,11 @@ func (g *Games) processAddPlayerToGameMessage(message interface{}) bool {
 	return true
 }
 
-func (g *Games) persist(game *Game) {
+func (g *Games) persist(game *common.Game) {
 	if g.engine == nil {
 		return
 	}
-	data, err := game.marshal()
+	data, err := game.Marshal()
 	if err != nil {
 		log.Printf("error trying to convert game %d to JSON: %v", game.Pin, err)
 		return
@@ -1279,13 +869,13 @@ func (g *Games) persist(game *Game) {
 	}
 }
 
-func (g *Games) getAll() []Game {
+func (g *Games) GetAll() []common.Game {
 	keys, err := g.engine.GetKeys("game")
 	if err != nil {
 		log.Printf("error getting all game keys from persistent store: %v", err)
 		return nil
 	}
-	all := []Game{}
+	all := []common.Game{}
 	for _, key := range keys {
 		key = key[len("game:"):]
 		keyInt, err := strconv.Atoi(key)
@@ -1304,7 +894,7 @@ func (g *Games) getAll() []Game {
 }
 
 func (g *Games) Add(host string) (int, error) {
-	game := Game{
+	game := common.Game{
 		Host:            host,
 		Players:         make(map[string]int),
 		PlayerNames:     make(map[string]string),
@@ -1336,7 +926,7 @@ func generatePin() int {
 	return total
 }
 
-func (g *Games) getGamePointer(pin int) (*Game, error) {
+func (g *Games) getGamePointer(pin int) (*common.Game, error) {
 	g.mutex.RLock()
 	game, ok := g.all[pin]
 	g.mutex.RUnlock()
@@ -1346,15 +936,15 @@ func (g *Games) getGamePointer(pin int) (*Game, error) {
 	}
 
 	if g.engine == nil {
-		return nil, NewNoSuchGameError(pin)
+		return nil, common.NewNoSuchGameError(pin)
 	}
 
 	// game doesn't exist in memory - see if it's in the persistent store
 	data, err := g.engine.Get(fmt.Sprintf("game:%d", pin))
 	if err != nil {
-		return nil, NewNoSuchGameError(pin)
+		return nil, common.NewNoSuchGameError(pin)
 	}
-	game, err = unmarshalGame(data)
+	game, err = common.UnmarshalGame(data)
 	if err != nil {
 		return nil, fmt.Errorf("could not retrieve game %d from persistent store: %v", pin, err)
 	}
@@ -1366,13 +956,13 @@ func (g *Games) getGamePointer(pin int) (*Game, error) {
 	return game, nil
 }
 
-func (g *Games) Get(pin int) (Game, error) {
+func (g *Games) Get(pin int) (common.Game, error) {
 	gp, err := g.getGamePointer(pin)
 	if err != nil {
-		return Game{}, err
+		return common.Game{}, err
 	}
 
-	return gp.copy(), nil
+	return gp.Copy(), nil
 }
 
 func (g *Games) GetHostForGame(pin int) string {
@@ -1388,10 +978,10 @@ func (g *Games) GetPlayersForGame(pin int) []string {
 	if err != nil {
 		return []string{}
 	}
-	return game.getPlayers()
+	return game.GetPlayers()
 }
 
-func (g *Games) Update(game Game) error {
+func (g *Games) Update(game common.Game) error {
 	p := &game
 
 	g.mutex.Lock()
@@ -1417,15 +1007,15 @@ func (g *Games) Delete(pin int) {
 func (g *Games) AddPlayerToGame(msg AddPlayerToGameMessage) error {
 	game, err := g.getGamePointer(msg.pin)
 	if err != nil {
-		return NewNoSuchGameError(msg.pin)
+		return common.NewNoSuchGameError(msg.pin)
 	}
 
-	if game.GameState != GameNotStarted {
+	if game.GameState != common.GameNotStarted {
 		return errors.New("game is not accepting new players")
 	}
 
 	g.mutex.Lock()
-	changed := game.addPlayer(msg.sessionid, msg.name)
+	changed := game.AddPlayer(msg.sessionid, msg.name)
 	g.mutex.Unlock()
 	if changed {
 		g.persist(game)
@@ -1433,14 +1023,14 @@ func (g *Games) AddPlayerToGame(msg AddPlayerToGameMessage) error {
 	return nil
 }
 
-func (g *Games) SetGameQuiz(pin int, quiz Quiz) {
+func (g *Games) SetGameQuiz(pin int, quiz common.Quiz) {
 	game, err := g.getGamePointer(pin)
 	if err != nil {
 		return
 	}
 
 	g.mutex.Lock()
-	game.setQuiz(quiz)
+	game.SetQuiz(quiz)
 	g.all[pin] = game // this is redundant
 	g.mutex.Unlock()
 
@@ -1454,7 +1044,7 @@ func (g *Games) DeletePlayerFromGame(sessionid string, pin int) {
 	}
 
 	g.mutex.Lock()
-	game.deletePlayer(sessionid)
+	game.DeletePlayer(sessionid)
 	g.all[pin] = game // this is redundant
 	g.mutex.Unlock()
 
@@ -1465,11 +1055,11 @@ func (g *Games) DeletePlayerFromGame(sessionid string, pin int) {
 func (g *Games) NextState(pin int) (int, error) {
 	game, err := g.getGamePointer(pin)
 	if err != nil {
-		return 0, NewNoSuchGameError(pin)
+		return 0, common.NewNoSuchGameError(pin)
 	}
 
 	g.mutex.Lock()
-	state, err := game.nextState()
+	state, err := game.NextState()
 	g.mutex.Unlock()
 	g.persist(game)
 	return state, err
@@ -1481,11 +1071,11 @@ func (g *Games) NextState(pin int) (int, error) {
 func (g *Games) ShowResults(pin int) error {
 	game, err := g.getGamePointer(pin)
 	if err != nil {
-		return NewNoSuchGameError(pin)
+		return common.NewNoSuchGameError(pin)
 	}
 
 	g.mutex.Lock()
-	err = game.showResults()
+	err = game.ShowResults()
 	g.mutex.Unlock()
 	if err == nil {
 		g.persist(game)
@@ -1494,14 +1084,14 @@ func (g *Games) ShowResults(pin int) error {
 }
 
 // Returns - questionIndex, number of seconds left, question, error
-func (g *Games) GetCurrentQuestion(pin int) (GameCurrentQuestion, error) {
+func (g *Games) GetCurrentQuestion(pin int) (common.GameCurrentQuestion, error) {
 	game, err := g.getGamePointer(pin)
 	if err != nil {
-		return GameCurrentQuestion{}, NewNoSuchGameError(pin)
+		return common.GameCurrentQuestion{}, common.NewNoSuchGameError(pin)
 	}
 
 	g.mutex.Lock()
-	changed, currentQuestion, err := game.getCurrentQuestion()
+	changed, currentQuestion, err := game.GetCurrentQuestion()
 	g.mutex.Unlock()
 	if changed {
 		g.persist(game)
@@ -1510,14 +1100,14 @@ func (g *Games) GetCurrentQuestion(pin int) (GameCurrentQuestion, error) {
 	return currentQuestion, err
 }
 
-func (g *Games) RegisterAnswer(pin int, sessionid string, answerIndex int) (AnswersUpdate, error) {
+func (g *Games) RegisterAnswer(pin int, sessionid string, answerIndex int) (common.AnswersUpdate, error) {
 	game, err := g.getGamePointer(pin)
 	if err != nil {
-		return AnswersUpdate{}, NewNoSuchGameError(pin)
+		return common.AnswersUpdate{}, common.NewNoSuchGameError(pin)
 	}
 
 	g.mutex.Lock()
-	changed, update, err := game.registerAnswer(sessionid, answerIndex)
+	changed, update, err := game.RegisterAnswer(sessionid, answerIndex)
 	g.mutex.Unlock()
 	if changed {
 		g.persist(game)
@@ -1525,40 +1115,33 @@ func (g *Games) RegisterAnswer(pin int, sessionid string, answerIndex int) (Answ
 	return update, err
 }
 
-func (g *Games) GetQuestionResults(pin int) (QuestionResults, error) {
+func (g *Games) GetQuestionResults(pin int) (common.QuestionResults, error) {
 	game, err := g.getGamePointer(pin)
 	if err != nil {
-		return QuestionResults{}, NewNoSuchGameError(pin)
+		return common.QuestionResults{}, common.NewNoSuchGameError(pin)
 	}
 
 	g.mutex.RLock()
 	defer g.mutex.RUnlock()
-	return game.getQuestionResults()
+	return game.GetQuestionResults()
 }
 
-func (g *Games) GetWinners(pin int) ([]PlayerScore, error) {
+func (g *Games) GetWinners(pin int) ([]common.PlayerScore, error) {
 	game, err := g.getGamePointer(pin)
 	if err != nil {
-		return []PlayerScore{}, NewNoSuchGameError(pin)
+		return []common.PlayerScore{}, common.NewNoSuchGameError(pin)
 	}
 
 	g.mutex.RLock()
 	defer g.mutex.RUnlock()
-	return game.getWinners(), nil
+	return game.GetWinners(), nil
 }
 
 func (g *Games) GetGameState(pin int) (int, error) {
 	game, err := g.getGamePointer(pin)
 	if err != nil {
-		return 0, NewNoSuchGameError(pin)
+		return 0, common.NewNoSuchGameError(pin)
 	}
 
-	return game.getGameState(), nil
-}
-
-func calculateScore(timeLeft, questionDuration int) int {
-	if timeLeft < 0 {
-		timeLeft = 0
-	}
-	return 100 + (timeLeft * 100 / questionDuration)
+	return game.GetGameState(), nil
 }

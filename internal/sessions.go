@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -9,54 +8,16 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/kwkoo/go-quiz/internal/common"
 )
 
 const reaperInterval = 60
 
-type Session struct {
-	Id      string    `json:"id"`
-	Client  *Client   `json:"client"`
-	Screen  string    `json:"screen"`
-	Gamepin int       `json:"gamepin"`
-	Name    string    `json:"name"`
-	Admin   bool      `json:"admin"`
-	Expiry  time.Time `json:"expiry"`
-}
-
-func unmarshalSession(b []byte) (*Session, error) {
-	var session Session
-	dec := json.NewDecoder(bytes.NewReader(b))
-	if err := dec.Decode(&session); err != nil {
-		return nil, fmt.Errorf("error unmarshaling bytes to session: %v", err)
-	}
-	return &session, nil
-}
-
-func (s Session) marshal() ([]byte, error) {
-	var b bytes.Buffer
-	enc := json.NewEncoder(&b)
-	if err := enc.Encode(&s); err != nil {
-		return nil, err
-	}
-	return b.Bytes(), nil
-}
-
-func (s *Session) copy() Session {
-	return Session{
-		Id:      s.Id,
-		Client:  s.Client,
-		Screen:  s.Screen,
-		Gamepin: s.Gamepin,
-		Name:    s.Name,
-		Admin:   s.Admin,
-		Expiry:  s.Expiry,
-	}
-}
-
 type Sessions struct {
 	msghub         *MessageHub
 	mutex          sync.RWMutex
-	all            map[string]*Session
+	all            map[string]*common.Session
 	engine         *PersistenceEngine
 	auth           *Auth
 	sessionTimeout int
@@ -67,7 +28,7 @@ func InitSessions(msghub *MessageHub, engine *PersistenceEngine, auth *Auth, ses
 
 	sessions := Sessions{
 		msghub:         msghub,
-		all:            make(map[string]*Session),
+		all:            make(map[string]*common.Session),
 		engine:         engine,
 		auth:           auth,
 		sessionTimeout: sessionTimeout,
@@ -188,13 +149,13 @@ func (s *Sessions) processSessionMessage(message interface{}) bool {
 		return false
 	}
 
-	session := s.GetSession(msg.sessionid)
-	if session == nil {
+	sess := s.GetSession(msg.sessionid)
+	if sess == nil {
 		// session doesn't exist
 		return true
 	}
 	s.msghub.Send(clientHubTopic, ClientMessage{
-		client:  session.Client,
+		client:  sess.Client.(*Client),
 		message: msg.message,
 	})
 	return true
@@ -235,27 +196,27 @@ func (s *Sessions) processSessionToScreenMessage(message interface{}) bool {
 
 	case "host-select-quiz":
 		s.msghub.Send(quizzesTopic, SendQuizzesToClientMessage{
-			client:    session.Client,
+			client:    session.Client.(*Client),
 			sessionid: session.Id,
 		})
 
 	case "host-game-lobby":
 		s.msghub.Send(gamesTopic, SendGameMetadataMessage{
-			client:    session.Client,
+			client:    session.Client.(*Client),
 			sessionid: session.Id,
 			pin:       session.Gamepin,
 		})
 
 	case "host-show-question":
 		s.msghub.Send(gamesTopic, HostShowQuestionMessage{
-			client:    session.Client,
+			client:    session.Client.(*Client),
 			sessionid: session.Id,
 			pin:       session.Gamepin,
 		})
 
 	case "host-show-game-results":
 		s.msghub.Send(gamesTopic, HostShowGameResultsMessage{
-			client:    session.Client,
+			client:    session.Client.(*Client),
 			sessionid: session.Id,
 			pin:       session.Gamepin,
 		})
@@ -266,7 +227,7 @@ func (s *Sessions) processSessionToScreenMessage(message interface{}) bool {
 	s.SetSessionScreen(session.Id, msg.nextscreen)
 
 	s.msghub.Send(clientHubTopic, ClientMessage{
-		client:  session.Client,
+		client:  session.Client.(*Client),
 		message: "screen " + msg.nextscreen,
 	})
 
@@ -597,8 +558,8 @@ func (s *Sessions) processClientCommand(msg interface{}) bool {
 	}
 }
 
-func (s *Sessions) NewSession(id string, client *Client, screen string) *Session {
-	session := &Session{
+func (s *Sessions) NewSession(id string, client *Client, screen string) *common.Session {
+	session := &common.Session{
 		Id:     id,
 		Client: client,
 		Screen: screen,
@@ -636,7 +597,7 @@ func (s *Sessions) expireSessions() {
 	s.mutex.Unlock()
 }
 
-func (s *Sessions) persist(session *Session) {
+func (s *Sessions) persist(session *common.Session) {
 	s.mutex.Lock()
 	session.Expiry = time.Now().Add(time.Duration(s.sessionTimeout) * time.Second)
 	s.mutex.Unlock()
@@ -645,7 +606,7 @@ func (s *Sessions) persist(session *Session) {
 		return
 	}
 
-	data, err := session.marshal()
+	data, err := session.Marshal()
 	if err != nil {
 		log.Printf("error encoding session %s to JSON: %v", session.Id, err)
 		return
@@ -656,11 +617,11 @@ func (s *Sessions) persist(session *Session) {
 	}
 }
 
-func (s *Sessions) getAll() []Session {
-	all := []Session{}
+func (s *Sessions) GetAll() []common.Session {
+	all := []common.Session{}
 	s.mutex.RLock()
 	for _, v := range s.all {
-		all = append(all, v.copy())
+		all = append(all, v.Copy())
 	}
 	s.mutex.RUnlock()
 	return all
@@ -711,7 +672,7 @@ func (s *Sessions) GetClientForSession(id string) *Client {
 		return nil
 	}
 
-	return session.Client
+	return session.Client.(*Client)
 }
 
 func (s *Sessions) UpdateClientForSession(id string, newclient *Client) {
@@ -730,7 +691,7 @@ func (s *Sessions) UpdateClientForSession(id string, newclient *Client) {
 	s.persist(session)
 }
 
-func (s *Sessions) GetSession(id string) *Session {
+func (s *Sessions) GetSession(id string) *common.Session {
 	s.mutex.RLock()
 	session, ok := s.all[id]
 	s.mutex.RUnlock()
@@ -751,7 +712,7 @@ func (s *Sessions) GetSession(id string) *Session {
 		return nil
 	}
 
-	decoded, err := unmarshalSession(data)
+	decoded, err := common.UnmarshalSession(data)
 	if err != nil {
 		log.Printf("error decoding session from redis: %v", err)
 		return nil

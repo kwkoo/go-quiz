@@ -8,13 +8,33 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/kwkoo/go-quiz/internal/common"
 )
 
-type RestApi struct {
-	hub *Hub
+type QuizApp interface {
+	GetQuizzes() []common.Quiz
+	GetQuiz(int) (common.Quiz, error)
+	DeleteQuiz(int)
+	AddQuiz(common.Quiz) (common.Quiz, error)
+	UpdateQuiz(common.Quiz) error
+	ExtendSessionExpiry(string)
+	GetSessions() []common.Session
+	GetSession(string) *common.Session
+	DeleteSession(string)
+	GetGames() []common.Game
+	GetGame(int) (common.Game, error)
+	DeleteGame(int)
+	UpdateGame(common.Game) error
+	RemoveGameFromSessions([]string)
+	SendClientsToScreen([]string, string)
 }
 
-func InitRestApi(hub *Hub) *RestApi {
+type RestApi struct {
+	hub QuizApp
+}
+
+func InitRestApi(hub QuizApp) *RestApi {
 	return &RestApi{hub: hub}
 }
 
@@ -46,7 +66,7 @@ func (api *RestApi) Quiz(w http.ResponseWriter, r *http.Request) {
 		last := lastPart(r.URL.Path)
 		id, err := strconv.Atoi(last)
 		if err != nil {
-			allQuizzes := api.hub.quizzes.GetQuizzes()
+			allQuizzes := api.hub.GetQuizzes()
 			w.Header().Add("Content-Type", "application/json")
 			enc := json.NewEncoder(w)
 			if err := enc.Encode(allQuizzes); err != nil {
@@ -56,7 +76,7 @@ func (api *RestApi) Quiz(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		quiz, err := api.hub.quizzes.Get(id)
+		quiz, err := api.hub.GetQuiz(id)
 		if err != nil {
 			streamResponse(w, false, fmt.Sprintf("quiz %d does not exist", id))
 			return
@@ -78,7 +98,7 @@ func (api *RestApi) Quiz(w http.ResponseWriter, r *http.Request) {
 			streamResponse(w, false, fmt.Sprintf("invalid id %s: %v", last, err))
 			return
 		}
-		api.hub.quizzes.Delete(id)
+		api.hub.DeleteQuiz(id)
 		streamResponse(w, true, "")
 		return
 	}
@@ -94,7 +114,7 @@ func (api *RestApi) Quiz(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		for _, q := range toImport {
-			if _, err := api.hub.quizzes.Add(q); err != nil {
+			if _, err := api.hub.AddQuiz(q); err != nil {
 				streamResponse(w, false, fmt.Sprintf("error adding quiz: %v", err))
 				continue
 			}
@@ -104,7 +124,7 @@ func (api *RestApi) Quiz(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// we're importing a single quiz
-	toImport, err := UnmarshalQuiz(r.Body)
+	toImport, err := common.UnmarshalQuiz(r.Body)
 	if err != nil {
 		streamResponse(w, false, fmt.Sprintf("error parsing JSON: %v", err))
 		return
@@ -112,7 +132,7 @@ func (api *RestApi) Quiz(w http.ResponseWriter, r *http.Request) {
 
 	if toImport.Id == 0 {
 		// no ID, so treat this as an add operation
-		if _, err := api.hub.quizzes.Add(toImport); err != nil {
+		if _, err := api.hub.AddQuiz(toImport); err != nil {
 			streamResponse(w, false, fmt.Sprintf("error adding quiz: %v", err))
 			return
 		}
@@ -121,7 +141,7 @@ func (api *RestApi) Quiz(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// update
-	if err := api.hub.quizzes.Update(toImport); err != nil {
+	if err := api.hub.UpdateQuiz(toImport); err != nil {
 		streamResponse(w, false, fmt.Sprintf("error updating quiz: %v", err))
 		return
 	}
@@ -134,7 +154,7 @@ func (api *RestApi) ExtendSession(w http.ResponseWriter, r *http.Request) {
 		streamResponse(w, false, "invalid session id")
 		return
 	}
-	api.hub.sessions.ExtendSessionExpiry(id)
+	api.hub.ExtendSessionExpiry(id)
 	streamResponse(w, true, "")
 }
 
@@ -142,7 +162,7 @@ func (api *RestApi) Session(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		if strings.HasSuffix(r.URL.Path, "/session") {
 			// get all sessions
-			all := api.hub.sessions.getAll()
+			all := api.hub.GetSessions()
 			w.Header().Add("Content-Type", "application/json")
 			enc := json.NewEncoder(w)
 			if err := enc.Encode(all); err != nil {
@@ -156,7 +176,7 @@ func (api *RestApi) Session(w http.ResponseWriter, r *http.Request) {
 			streamResponse(w, false, "invalid session id")
 			return
 		}
-		sessions := api.hub.sessions.GetSession(id)
+		sessions := api.hub.GetSession(id)
 		if sessions == nil {
 			streamResponse(w, false, fmt.Sprintf("invalid session id %s", id))
 			return
@@ -175,7 +195,7 @@ func (api *RestApi) Session(w http.ResponseWriter, r *http.Request) {
 			streamResponse(w, false, "invalid session id")
 			return
 		}
-		api.hub.sessions.DeleteSession(id)
+		api.hub.DeleteSession(id)
 		streamResponse(w, true, "")
 		return
 	}
@@ -187,7 +207,7 @@ func (api *RestApi) Game(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		if strings.HasSuffix(r.URL.Path, "/game") {
 			// get all games
-			all := api.hub.games.getAll()
+			all := api.hub.GetGames()
 			w.Header().Add("Content-Type", "application/json")
 			enc := json.NewEncoder(w)
 			if err := enc.Encode(all); err != nil {
@@ -206,7 +226,7 @@ func (api *RestApi) Game(w http.ResponseWriter, r *http.Request) {
 			streamResponse(w, false, fmt.Sprintf("invalid game id %s: %v", last, err))
 			return
 		}
-		game, err := api.hub.games.Get(pin)
+		game, err := api.hub.GetGame(pin)
 		if err != nil {
 			streamResponse(w, false, fmt.Sprintf("error getting game %d: %v", pin, err))
 			return
@@ -231,18 +251,18 @@ func (api *RestApi) Game(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		game, err := api.hub.games.Get(pin)
+		game, err := api.hub.GetGame(pin)
 		if err != nil {
 			streamResponse(w, false, fmt.Sprintf("could not get game with pin %d: %v", pin, err))
 			return
 		}
 
 		// remove players and host from game
-		players := append(game.getPlayers(), game.Host)
+		players := append(game.GetPlayers(), game.Host)
 		api.hub.RemoveGameFromSessions(players)
 		api.hub.SendClientsToScreen(players, "entrance")
 
-		api.hub.games.Delete(pin)
+		api.hub.DeleteGame(pin)
 		streamResponse(w, true, "")
 		return
 	}
@@ -250,12 +270,12 @@ func (api *RestApi) Game(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPut {
 		defer r.Body.Close()
 		dec := json.NewDecoder(r.Body)
-		var game Game
+		var game common.Game
 		if err := dec.Decode(&game); err != nil {
 			streamResponse(w, false, fmt.Sprintf("error decoding game JSON: %v", err))
 			return
 		}
-		if err := api.hub.games.Update(game); err != nil {
+		if err := api.hub.UpdateGame(game); err != nil {
 			streamResponse(w, false, fmt.Sprintf("error updating game: %v", err))
 			return
 		}
