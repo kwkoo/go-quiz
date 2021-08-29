@@ -595,7 +595,6 @@ func (s *Sessions) processClientCommand(msg interface{}) bool {
 		})
 		return true
 	}
-	return true
 }
 
 func (s *Sessions) NewSession(id string, client *Client, screen string) *Session {
