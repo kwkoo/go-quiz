@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"log"
 
+	"github.com/kwkoo/go-quiz/internal/api"
 	"github.com/kwkoo/go-quiz/internal/common"
 )
 
@@ -37,7 +38,7 @@ type Hub struct {
 	games *Games
 }
 
-func NewHub(msghub *MessageHub, redisHost, redisPassword string, auth *Auth, sessionTimeout int) *Hub {
+func NewHub(msghub *MessageHub, redisHost, redisPassword string, auth *api.Auth, sessionTimeout int) *Hub {
 	persistenceEngine := InitRedis(redisHost, redisPassword, msghub)
 	quizzes, err := InitQuizzes(msghub, persistenceEngine)
 	if err != nil {

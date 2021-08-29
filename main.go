@@ -12,6 +12,7 @@ import (
 
 	"github.com/kwkoo/configparser"
 	"github.com/kwkoo/go-quiz/internal"
+	"github.com/kwkoo/go-quiz/internal/api"
 )
 
 const authRealm = "Quiz Admin"
@@ -51,7 +52,7 @@ func main() {
 		filesystem = http.FS(subdir)
 	}
 
-	auth := internal.InitAuth(config.AdminUser, config.AdminPassword, authRealm)
+	auth := api.InitAuth(config.AdminUser, config.AdminPassword, authRealm)
 
 	fileServer := http.FileServer(filesystem).ServeHTTP
 
@@ -59,7 +60,7 @@ func main() {
 
 	http.HandleFunc("/healthz", health)
 
-	cookieGen := internal.InitCookieGenerator(fileServer)
+	cookieGen := api.InitCookieGenerator(fileServer)
 	http.HandleFunc("/", cookieGen.ServeHTTP)
 
 	mh := internal.InitMessageHub()
@@ -67,7 +68,7 @@ func main() {
 	hub := internal.NewHub(mh, config.RedisHost, config.RedisPassword, auth, config.SessionTimeout)
 	go hub.Run()
 
-	api := internal.InitRestApi(hub)
+	api := api.InitRestApi(hub)
 	http.HandleFunc("/api/", auth.BasicAuth(api.ServeHTTP))
 
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {

@@ -53,3 +53,13 @@ func UnmarshalQuiz(r io.Reader) (Quiz, error) {
 	}
 	return quiz, nil
 }
+
+// Ingests an array of Quiz objects in JSON
+func UnmarshalQuizzes(r io.Reader) ([]Quiz, error) {
+	dec := json.NewDecoder(r)
+	var quizzes []Quiz
+	if err := dec.Decode(&quizzes); err != nil {
+		return nil, err
+	}
+	return quizzes, nil
+}

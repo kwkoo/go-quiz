@@ -1,4 +1,4 @@
-package internal
+package api
 
 import (
 	"encoding/json"
@@ -108,7 +108,7 @@ func (api *RestApi) Quiz(w http.ResponseWriter, r *http.Request) {
 
 	// check to see if it's bulk import
 	if strings.HasSuffix(r.URL.Path, "/bulk") {
-		toImport, err := UnmarshalQuizzes(r.Body)
+		toImport, err := common.UnmarshalQuizzes(r.Body)
 		if err != nil {
 			streamResponse(w, false, fmt.Sprintf("error parsing JSON: %v", err))
 			return

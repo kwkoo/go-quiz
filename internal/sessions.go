@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kwkoo/go-quiz/internal/api"
 	"github.com/kwkoo/go-quiz/internal/common"
 )
 
@@ -19,11 +20,11 @@ type Sessions struct {
 	mutex          sync.RWMutex
 	all            map[string]*common.Session
 	engine         *PersistenceEngine
-	auth           *Auth
+	auth           *api.Auth
 	sessionTimeout int
 }
 
-func InitSessions(msghub *MessageHub, engine *PersistenceEngine, auth *Auth, sessionTimeout int) *Sessions {
+func InitSessions(msghub *MessageHub, engine *PersistenceEngine, auth *api.Auth, sessionTimeout int) *Sessions {
 	log.Printf("session timeout set to %d seconds", sessionTimeout)
 
 	sessions := Sessions{

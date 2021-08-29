@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"sort"
 	"sync"
@@ -237,14 +236,4 @@ func (q *Quizzes) nextID() (int, error) {
 		return 0, fmt.Errorf("error generating quiz ID from persistent store: %v", err)
 	}
 	return id, nil
-}
-
-// Ingests an array of Quiz objects in JSON
-func UnmarshalQuizzes(r io.Reader) ([]common.Quiz, error) {
-	dec := json.NewDecoder(r)
-	var quizzes []common.Quiz
-	if err := dec.Decode(&quizzes); err != nil {
-		return nil, err
-	}
-	return quizzes, nil
 }
