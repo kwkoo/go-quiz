@@ -220,7 +220,7 @@ func (s *Sessions) processSessionToScreenMessage(message interface{}) bool {
 	session := s.GetSession(msg.sessionid)
 	if session == nil {
 		// session doesn't exist
-		log.Print("*** session doesn't exist")
+		log.Printf("session %s does not exist", msg.sessionid)
 		return true
 	}
 
@@ -610,9 +610,6 @@ func (s *Sessions) NewSession(id string, client *Client, screen string) *Session
 	s.mutex.Unlock()
 
 	s.persist(session)
-
-	_, ok := s.all[id]
-	log.Printf("*** created session %s %v", id, ok)
 
 	return session
 }
