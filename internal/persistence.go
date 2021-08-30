@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/gomodule/redigo/redis"
-	"github.com/kwkoo/go-quiz/internal/common"
 )
 
 type PersistenceEngine struct {
@@ -16,7 +15,7 @@ type PersistenceEngine struct {
 // Redis helper functions
 // Copied from https://github.com/pete911/examples-redigo
 
-func InitRedis(redisHost, redisPassword string, shutInf common.ShutdownInformer) *PersistenceEngine {
+func InitRedis(redisHost, redisPassword string) *PersistenceEngine {
 	// init redis connection pool
 	// copied from https://github.com/pete911/examples-redigo
 	pool := redis.Pool{
@@ -45,14 +44,12 @@ func InitRedis(redisHost, redisPassword string, shutInf common.ShutdownInformer)
 		},
 	}
 
-	go func(shutdownChan chan struct{}) {
-		<-shutdownChan
-		pool.Close()
-		log.Print("persistence engine graceful shutdown")
-		shutInf.NotifyShutdownComplete()
-	}(shutInf.GetShutdownChan())
-
 	return &PersistenceEngine{pool: &pool}
+}
+
+func (engine *PersistenceEngine) Close() {
+	engine.pool.Close()
+	log.Print("persistence engine shutdown")
 }
 
 func (engine *PersistenceEngine) GetKeys(prefix string) ([]string, error) {

@@ -12,6 +12,7 @@ import (
 	"github.com/kwkoo/go-quiz/internal/api"
 	"github.com/kwkoo/go-quiz/internal/common"
 	"github.com/kwkoo/go-quiz/internal/messaging"
+	"github.com/kwkoo/go-quiz/internal/shutdown"
 )
 
 const reaperInterval = 60
@@ -48,24 +49,31 @@ func InitSessions(msghub *messaging.MessageHub, engine *PersistenceEngine, auth 
 		sessions.updateClientForSession(key, nil)
 	}
 
-	go func(shutdownChan chan struct{}) {
+	// session reaper
+	go func() {
+		shutdownChan := shutdown.GetShutdownChan()
+		timeout := time.After(reaperInterval * time.Second)
 		for {
 			select {
 			case <-shutdownChan:
 				log.Printf("shutting down session reaper")
-				msghub.NotifyShutdownComplete()
+				shutdown.NotifyShutdownComplete()
 				return
-			case <-time.After(reaperInterval * time.Second):
+			case <-timeout:
+				log.Print("running session reaper")
 				sessions.expireSessions()
+				timeout = time.After(5 * time.Second)
+			default:
+				time.Sleep(3 * time.Second)
 			}
 		}
-	}(msghub.GetShutdownChan())
+	}()
 
 	return &sessions
 }
 
 func (s *Sessions) Run() {
-	shutdownChan := s.msghub.GetShutdownChan()
+	shutdownChan := shutdown.GetShutdownChan()
 	fromClients := s.msghub.GetTopic(messaging.IncomingMessageTopic)
 	sessionsHub := s.msghub.GetTopic(messaging.SessionsTopic)
 
@@ -115,7 +123,8 @@ func (s *Sessions) Run() {
 				continue
 			}
 		case <-shutdownChan:
-			s.msghub.NotifyShutdownComplete()
+			log.Print("shutting down sessions handler")
+			shutdown.NotifyShutdownComplete()
 			return
 		}
 	}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/kwkoo/go-quiz/internal/common"
 	"github.com/kwkoo/go-quiz/internal/messaging"
+	"github.com/kwkoo/go-quiz/internal/shutdown"
 )
 
 type Games struct {
@@ -54,7 +55,7 @@ func InitGames(msghub *messaging.MessageHub, engine *PersistenceEngine) *Games {
 }
 
 func (g *Games) Run() {
-	shutdownChan := g.msghub.GetShutdownChan()
+	shutdownChan := shutdown.GetShutdownChan()
 	gamesHub := g.msghub.GetTopic(messaging.GamesTopic)
 
 	for {
@@ -116,7 +117,8 @@ func (g *Games) Run() {
 				continue
 			}
 		case <-shutdownChan:
-			g.msghub.NotifyShutdownComplete()
+			log.Print("shutting down games handler")
+			shutdown.NotifyShutdownComplete()
 			return
 		}
 	}

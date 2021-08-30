@@ -14,6 +14,7 @@ import (
 	"github.com/kwkoo/go-quiz/internal"
 	"github.com/kwkoo/go-quiz/internal/api"
 	"github.com/kwkoo/go-quiz/internal/messaging"
+	"github.com/kwkoo/go-quiz/internal/shutdown"
 )
 
 const authRealm = "Quiz Admin"
@@ -38,6 +39,8 @@ func main() {
 	if err := configparser.Parse(&config); err != nil {
 		log.Fatal(err)
 	}
+
+	shutdown.InitShutdownHandler()
 
 	var filesystem http.FileSystem
 	if len(config.Docroot) > 0 {
@@ -85,7 +88,7 @@ func main() {
 		if err := server.ListenAndServe(); err != nil {
 			if err == http.ErrServerClosed {
 				log.Print("web server graceful shutdown")
-				mh.NotifyShutdownComplete()
+				shutdown.NotifyShutdownComplete()
 				return
 			}
 			log.Fatal(err)
@@ -93,12 +96,14 @@ func main() {
 	}()
 
 	go func() {
-		<-mh.GetShutdownChan()
-		log.Print("interrupt signal received, initiaing web server shutdown...")
+		<-shutdown.GetShutdownChan()
+		log.Print("interrupt signal received, initiating web server shutdown...")
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		server.Shutdown(ctx)
 	}()
 
-	mh.WaitForShutdown()
+	shutdown.WaitForShutdown()
+	mh.Close()
+	hub.ClosePersistenceEngine()
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/kwkoo/go-quiz/internal/api"
 	"github.com/kwkoo/go-quiz/internal/common"
 	"github.com/kwkoo/go-quiz/internal/messaging"
+	"github.com/kwkoo/go-quiz/internal/shutdown"
 )
 
 // Hub maintains the set of active clients and broadcasts messages to the
@@ -35,10 +36,12 @@ type Hub struct {
 	quizzes *Quizzes
 
 	games *Games
+
+	persistenceengine *PersistenceEngine
 }
 
 func NewHub(msghub *messaging.MessageHub, redisHost, redisPassword string, auth *api.Auth, sessionTimeout int) *Hub {
-	persistenceEngine := InitRedis(redisHost, redisPassword, msghub)
+	persistenceEngine := InitRedis(redisHost, redisPassword)
 	quizzes, err := InitQuizzes(msghub, persistenceEngine)
 	if err != nil {
 		log.Fatal(err)
@@ -60,26 +63,31 @@ func NewHub(msghub *messaging.MessageHub, redisHost, redisPassword string, auth 
 	}()
 
 	return &Hub{
-		incomingcommands: make(chan *ClientCommand),
-		register:         make(chan *Client),
-		unregister:       make(chan *Client),
-		clients:          make(map[*Client]bool),
-		msghub:           msghub,
-		sessions:         sessions,
-		quizzes:          quizzes,
-		games:            games,
+		incomingcommands:  make(chan *ClientCommand),
+		register:          make(chan *Client),
+		unregister:        make(chan *Client),
+		clients:           make(map[*Client]bool),
+		msghub:            msghub,
+		sessions:          sessions,
+		quizzes:           quizzes,
+		games:             games,
+		persistenceengine: persistenceEngine,
 	}
 }
 
+func (h *Hub) ClosePersistenceEngine() {
+	h.persistenceengine.Close()
+}
+
 func (h *Hub) Run() {
-	shutdownChan := h.msghub.GetShutdownChan()
+	shutdownChan := shutdown.GetShutdownChan()
 	clientHub := h.msghub.GetTopic(messaging.ClientHubTopic)
 
 	for {
 		select {
 		case <-shutdownChan:
 			log.Print("websockethub received shutdown signal, exiting")
-			h.msghub.NotifyShutdownComplete()
+			shutdown.NotifyShutdownComplete()
 			return
 
 		case client := <-h.register:

@@ -2,10 +2,7 @@ package messaging
 
 import (
 	"log"
-	"os"
-	"os/signal"
 	"sync"
-	"syscall"
 )
 
 const chanSize = 20
@@ -20,22 +17,13 @@ const (
 )
 
 type MessageHub struct {
-	wg           sync.WaitGroup
-	mux          sync.Mutex
-	chans        map[string](chan interface{})
-	shutdownChan chan struct{}
-	signalChan   chan os.Signal
+	mux   sync.Mutex
+	chans map[string](chan interface{})
 }
 
 func InitMessageHub() *MessageHub {
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
-	signal.Notify(signalChan, syscall.SIGTERM)
-
 	return &MessageHub{
-		chans:        make(map[string]chan interface{}),
-		shutdownChan: make(chan struct{}),
-		signalChan:   signalChan,
+		chans: make(map[string]chan interface{}),
 	}
 }
 
@@ -44,27 +32,11 @@ func (mh *MessageHub) Send(topicname string, msg interface{}) {
 	topic <- msg
 }
 
-func (mh *MessageHub) GetShutdownChan() chan struct{} {
-	mh.wg.Add(1)
-	return mh.shutdownChan
-}
-
-func (mh *MessageHub) NotifyShutdownComplete() {
-	mh.wg.Done()
-}
-
-func (mh *MessageHub) WaitForShutdown() {
-	<-mh.signalChan
-	log.Print("received signal - shutting down gracefully...")
-
-	// we received a signal - proceed to call all registered listeners
-	close(mh.shutdownChan)
-	mh.wg.Wait()
-	log.Print("all shutdown listeners are done, closing all channels...")
+func (mh *MessageHub) Close() {
 	for _, c := range mh.chans {
 		close(c)
 	}
-	log.Print("shutdown complete")
+	log.Print("MessageHub shutdown complete")
 }
 
 func (mh *MessageHub) GetTopic(name string) chan interface{} {
