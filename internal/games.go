@@ -9,16 +9,17 @@ import (
 	"sync"
 
 	"github.com/kwkoo/go-quiz/internal/common"
+	"github.com/kwkoo/go-quiz/internal/messaging"
 )
 
 type Games struct {
 	mutex  sync.RWMutex
 	all    map[int]*common.Game // map key is the game pin
 	engine *PersistenceEngine
-	msghub *MessageHub
+	msghub *messaging.MessageHub
 }
 
-func InitGames(msghub *MessageHub, engine *PersistenceEngine) *Games {
+func InitGames(msghub *messaging.MessageHub, engine *PersistenceEngine) *Games {
 	games := Games{
 		all:    make(map[int]*common.Game),
 		engine: engine,
@@ -54,7 +55,7 @@ func InitGames(msghub *MessageHub, engine *PersistenceEngine) *Games {
 
 func (g *Games) Run() {
 	shutdownChan := g.msghub.GetShutdownChan()
-	gamesHub := g.msghub.GetTopic(gamesTopic)
+	gamesHub := g.msghub.GetTopic(messaging.GamesTopic)
 
 	for {
 		select {
@@ -108,11 +109,38 @@ func (g *Games) Run() {
 			if g.processDeleteGameMessage(msg) {
 				continue
 			}
+			if g.processUpdateGameMessage(msg) {
+				continue
+			}
+			if g.processDeleteGameByPin(msg) {
+				continue
+			}
 		case <-shutdownChan:
 			g.msghub.NotifyShutdownComplete()
 			return
 		}
 	}
+}
+
+func (g *Games) processDeleteGameByPin(message interface{}) bool {
+	msg, ok := message.(DeleteGameByPin)
+	if !ok {
+		return false
+	}
+
+	g.delete(msg.pin)
+	return true
+}
+
+func (g *Games) processUpdateGameMessage(message interface{}) bool {
+	msg, ok := message.(UpdateGameMessage)
+	if !ok {
+		return false
+	}
+
+	g.update(msg.Game)
+
+	return true
 }
 
 func (g *Games) processDeleteGameMessage(message interface{}) bool {
@@ -126,13 +154,13 @@ func (g *Games) processDeleteGameMessage(message interface{}) bool {
 		return true
 	}
 
-	g.Delete(msg.pin)
-	g.msghub.Send(sessionsTopic, SetSessionGamePinMessage{
+	g.delete(msg.pin)
+	g.msghub.Send(messaging.SessionsTopic, SetSessionGamePinMessage{
 		sessionid: msg.sessionid,
 		pin:       -1,
 	})
 
-	g.msghub.Send(sessionsTopic, SessionToScreenMessage{
+	g.msghub.Send(messaging.SessionsTopic, SessionToScreenMessage{
 		sessionid:  msg.sessionid,
 		nextscreen: "host-select-quiz",
 	})
@@ -151,21 +179,21 @@ func (g *Games) processNextQuestionMessage(message interface{}) bool {
 		return true
 	}
 
-	gameState, err := g.NextState(game.Pin)
+	gameState, err := g.nextState(game.Pin)
 	if err != nil {
-		g.msghub.Send(sessionsTopic, SetSessionGamePinMessage{
+		g.msghub.Send(messaging.SessionsTopic, SetSessionGamePinMessage{
 			sessionid: msg.sessionid,
 			pin:       -1,
 		})
 		if _, ok := err.(*common.NoSuchGameError); ok {
-			g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
+			g.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
 				sessionid:  msg.sessionid,
 				message:    err.Error(),
 				nextscreen: "entrance",
 			})
 			return true
 		}
-		g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
+		g.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
 			sessionid:  msg.sessionid,
 			message:    "error setting game to next state: " + err.Error(),
 			nextscreen: "host-select-quiz",
@@ -174,7 +202,7 @@ func (g *Games) processNextQuestionMessage(message interface{}) bool {
 	}
 
 	if gameState == common.QuestionInProgress {
-		g.msghub.Send(sessionsTopic, SessionToScreenMessage{
+		g.msghub.Send(messaging.SessionsTopic, SessionToScreenMessage{
 			sessionid:  msg.sessionid,
 			nextscreen: "host-show-question",
 		})
@@ -184,18 +212,18 @@ func (g *Games) processNextQuestionMessage(message interface{}) bool {
 	}
 
 	// assume that game has ended
-	g.msghub.Send(sessionsTopic, SessionToScreenMessage{
+	g.msghub.Send(messaging.SessionsTopic, SessionToScreenMessage{
 		sessionid:  msg.sessionid,
 		nextscreen: "host-show-game-results",
 	})
 
 	players := game.GetPlayers()
-	g.msghub.Send(sessionsTopic, DeregisterGameFromSessionsMessage{
+	g.msghub.Send(messaging.SessionsTopic, DeregisterGameFromSessionsMessage{
 		sessions: players,
 	})
 
 	for _, playerid := range players {
-		g.msghub.Send(sessionsTopic, SessionToScreenMessage{
+		g.msghub.Send(messaging.SessionsTopic, SessionToScreenMessage{
 			sessionid:  playerid,
 			nextscreen: "entrance",
 		})
@@ -220,8 +248,8 @@ func (g *Games) sendQuestionResultsToHost(client *Client, sessionid string, pin 
 		return common.Game{}, false
 	}
 
-	if err := g.ShowResults(pin); err != nil {
-		g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
+	if err := g.showResults(pin); err != nil {
+		g.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
 			sessionid:  sessionid,
 			message:    fmt.Sprintf("error moving game to show results state: %v", err),
 			nextscreen: "",
@@ -229,9 +257,9 @@ func (g *Games) sendQuestionResultsToHost(client *Client, sessionid string, pin 
 		return common.Game{}, false
 	}
 
-	results, err := g.GetQuestionResults(pin)
+	results, err := g.getQuestionResults(pin)
 	if err != nil {
-		g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
+		g.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
 			sessionid:  sessionid,
 			message:    fmt.Sprintf("error getting question results: %v", err),
 			nextscreen: "",
@@ -239,9 +267,9 @@ func (g *Games) sendQuestionResultsToHost(client *Client, sessionid string, pin 
 		return common.Game{}, false
 	}
 
-	encoded, err := convertToJSON(&results)
+	encoded, err := common.ConvertToJSON(&results)
 	if err != nil {
-		g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
+		g.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
 			sessionid:  sessionid,
 			message:    fmt.Sprintf("error converting question results payload to JSON: %v", err),
 			nextscreen: "",
@@ -249,7 +277,7 @@ func (g *Games) sendQuestionResultsToHost(client *Client, sessionid string, pin 
 		return common.Game{}, false
 	}
 
-	g.msghub.Send(clientHubTopic, ClientMessage{
+	g.msghub.Send(messaging.ClientHubTopic, ClientMessage{
 		client:  client,
 		message: "question-results " + encoded,
 	})
@@ -260,7 +288,7 @@ func (g *Games) sendQuestionResultsToHost(client *Client, sessionid string, pin 
 func (g *Games) sendGamePlayersToAnswerQuestionScreen(sessionid string, game common.Game) {
 	question, err := game.Quiz.GetQuestion(game.QuestionIndex)
 	if err != nil {
-		g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
+		g.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
 			sessionid:  sessionid,
 			message:    fmt.Sprintf("error getting question: %v", err),
 			nextscreen: "",
@@ -269,11 +297,11 @@ func (g *Games) sendGamePlayersToAnswerQuestionScreen(sessionid string, game com
 	}
 	answerCount := len(question.Answers)
 	for pid := range game.Players {
-		g.msghub.Send(sessionsTopic, SessionMessage{
+		g.msghub.Send(messaging.SessionsTopic, SessionMessage{
 			sessionid: pid,
 			message:   fmt.Sprintf("display-choices %d", answerCount),
 		})
-		g.msghub.Send(sessionsTopic, SessionToScreenMessage{
+		g.msghub.Send(messaging.SessionsTopic, SessionToScreenMessage{
 			sessionid:  pid,
 			nextscreen: "answer-question",
 		})
@@ -291,7 +319,7 @@ func (g *Games) processShowResultsMessage(message interface{}) bool {
 		return true
 	}
 
-	g.msghub.Send(sessionsTopic, SessionToScreenMessage{
+	g.msghub.Send(messaging.SessionsTopic, SessionToScreenMessage{
 		sessionid:  msg.sessionid,
 		nextscreen: "host-show-results",
 	})
@@ -307,17 +335,17 @@ func (g *Games) processShowResultsMessage(message interface{}) bool {
 		playerResults.Score = score
 
 		// we're doing this here to set the state for disconnected players
-		g.msghub.Send(sessionsTopic, SessionToScreenMessage{
+		g.msghub.Send(messaging.SessionsTopic, SessionToScreenMessage{
 			sessionid:  pid,
 			nextscreen: "display-player-results",
 		})
 
-		encoded, err := convertToJSON(&playerResults)
+		encoded, err := common.ConvertToJSON(&playerResults)
 		if err != nil {
 			log.Printf("error converting player-results payload to JSON: %v", err)
 			continue
 		}
-		g.msghub.Send(sessionsTopic, SessionMessage{
+		g.msghub.Send(messaging.SessionsTopic, SessionMessage{
 			sessionid: pid,
 			message:   "player-results " + encoded,
 		})
@@ -330,13 +358,13 @@ func (g *Games) processShowResultsMessage(message interface{}) bool {
 func (g *Games) ensureUserIsGameHost(client *Client, sessionid string, pin int) (common.Game, bool) {
 	game, err := g.Get(pin)
 	if err != nil {
-		g.msghub.Send(sessionsTopic, SetSessionGamePinMessage{
+		g.msghub.Send(messaging.SessionsTopic, SetSessionGamePinMessage{
 			sessionid: sessionid,
 			pin:       -1,
 		})
 
 		if _, ok := err.(*common.NoSuchGameError); ok {
-			g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
+			g.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
 				sessionid:  sessionid,
 				message:    err.Error(),
 				nextscreen: "entrance",
@@ -344,7 +372,7 @@ func (g *Games) ensureUserIsGameHost(client *Client, sessionid string, pin int) 
 			return common.Game{}, false
 		}
 
-		g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
+		g.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
 			sessionid:  sessionid,
 			message:    "error fetching game: " + err.Error(),
 			nextscreen: "entrance",
@@ -354,7 +382,7 @@ func (g *Games) ensureUserIsGameHost(client *Client, sessionid string, pin int) 
 	}
 
 	if sessionid != game.Host {
-		g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
+		g.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
 			sessionid:  sessionid,
 			message:    "you are not the host of the game",
 			nextscreen: "entrance",
@@ -376,9 +404,9 @@ func (g *Games) processStartGameMessage(message interface{}) bool {
 		return true
 	}
 
-	gameState, err := g.NextState(game.Pin)
+	gameState, err := g.nextState(game.Pin)
 	if err != nil {
-		g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
+		g.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
 			sessionid:  msg.sessionid,
 			message:    "error starting game: " + err.Error(),
 			nextscreen: "host-select-quiz",
@@ -387,18 +415,18 @@ func (g *Games) processStartGameMessage(message interface{}) bool {
 	}
 	if gameState != common.QuestionInProgress {
 		if gameState == common.ShowResults {
-			g.msghub.Send(gamesTopic, ShowResultsMessage(msg))
+			g.msghub.Send(messaging.GamesTopic, ShowResultsMessage(msg))
 			return true
 		}
 		if gameState == common.GameEnded {
-			g.msghub.Send(sessionsTopic, SessionToScreenMessage{
+			g.msghub.Send(messaging.SessionsTopic, SessionToScreenMessage{
 				sessionid:  msg.sessionid,
 				nextscreen: "host-select-quiz",
 			})
 			return true
 		}
 
-		g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
+		g.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
 			sessionid:  msg.sessionid,
 			message:    fmt.Sprintf("game was not in an expected state: %d", gameState),
 			nextscreen: "",
@@ -406,7 +434,7 @@ func (g *Games) processStartGameMessage(message interface{}) bool {
 		return true
 	}
 
-	g.msghub.Send(sessionsTopic, SessionToScreenMessage{
+	g.msghub.Send(messaging.SessionsTopic, SessionToScreenMessage{
 		sessionid:  msg.sessionid,
 		nextscreen: "host-show-question",
 	})
@@ -422,7 +450,7 @@ func (g *Games) processSetQuizForGameMessage(message interface{}) bool {
 		return false
 	}
 
-	g.SetGameQuiz(msg.pin, msg.quiz)
+	g.setGameQuiz(msg.pin, msg.quiz)
 	return true
 }
 
@@ -433,9 +461,9 @@ func (g *Games) processHostGameLobbyMessage(message interface{}) bool {
 	}
 
 	// create new game
-	pin, err := g.Add(msg.sessionid)
+	pin, err := g.add(msg.sessionid)
 	if err != nil {
-		g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
+		g.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
 			sessionid:  msg.sessionid,
 			message:    "could not add game: " + err.Error(),
 			nextscreen: "host-select-quiz",
@@ -444,12 +472,12 @@ func (g *Games) processHostGameLobbyMessage(message interface{}) bool {
 		return true
 	}
 
-	g.msghub.Send(sessionsTopic, SetSessionGamePinMessage{
+	g.msghub.Send(messaging.SessionsTopic, SetSessionGamePinMessage{
 		sessionid: msg.sessionid,
 		pin:       pin,
 	})
 
-	g.msghub.Send(quizzesTopic, LookupQuizForGameMessage{
+	g.msghub.Send(messaging.QuizzesTopic, LookupQuizForGameMessage{
 		client:    msg.client,
 		sessionid: msg.sessionid,
 		quizid:    msg.quizid,
@@ -471,18 +499,18 @@ func (g *Games) processCancelGameMessage(message interface{}) bool {
 
 	players := game.GetPlayers()
 	players = append(players, game.Host)
-	g.msghub.Send(sessionsTopic, DeregisterGameFromSessionsMessage{
+	g.msghub.Send(messaging.SessionsTopic, DeregisterGameFromSessionsMessage{
 		sessions: players,
 	})
 
 	for _, playerid := range players {
-		g.msghub.Send(sessionsTopic, SessionToScreenMessage{
+		g.msghub.Send(messaging.SessionsTopic, SessionToScreenMessage{
 			sessionid:  playerid,
 			nextscreen: "entrance",
 		})
 	}
 
-	g.Delete(game.Pin)
+	g.delete(game.Pin)
 
 	return true
 }
@@ -493,15 +521,15 @@ func (g *Games) processRegisterAnswerMessage(message interface{}) bool {
 		return false
 	}
 
-	answersUpdate, err := g.RegisterAnswer(msg.pin, msg.sessionid, msg.answer)
+	answersUpdate, err := g.registerAnswer(msg.pin, msg.sessionid, msg.answer)
 	if err != nil {
-		g.msghub.Send(sessionsTopic, SetSessionGamePinMessage{
+		g.msghub.Send(messaging.SessionsTopic, SetSessionGamePinMessage{
 			sessionid: msg.sessionid,
 			pin:       -1,
 		})
 
 		if _, ok := err.(*common.NoSuchGameError); ok {
-			g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
+			g.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
 				sessionid:  msg.sessionid,
 				message:    err.Error(),
 				nextscreen: "entrance",
@@ -512,19 +540,19 @@ func (g *Games) processRegisterAnswerMessage(message interface{}) bool {
 		if errState, ok := err.(*common.UnexpectedStateError); ok {
 			switch errState.CurrentState {
 			case common.GameNotStarted:
-				g.msghub.Send(sessionsTopic, SessionToScreenMessage{
+				g.msghub.Send(messaging.SessionsTopic, SessionToScreenMessage{
 					sessionid:  msg.sessionid,
 					nextscreen: "wait-for-game-start",
 				})
 
 			case common.ShowResults:
-				g.msghub.Send(sessionsTopic, SessionToScreenMessage{
+				g.msghub.Send(messaging.SessionsTopic, SessionToScreenMessage{
 					sessionid:  msg.sessionid,
 					nextscreen: "display-player-results",
 				})
 
 			default:
-				g.msghub.Send(sessionsTopic, SessionToScreenMessage{
+				g.msghub.Send(messaging.SessionsTopic, SessionToScreenMessage{
 					sessionid:  msg.sessionid,
 					nextscreen: "entrance",
 				})
@@ -532,7 +560,7 @@ func (g *Games) processRegisterAnswerMessage(message interface{}) bool {
 			return true
 		}
 
-		g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
+		g.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
 			sessionid:  msg.sessionid,
 			message:    "error registering answer: " + err.Error(),
 			nextscreen: "",
@@ -541,12 +569,12 @@ func (g *Games) processRegisterAnswerMessage(message interface{}) bool {
 	}
 
 	// send this player to wait for question to end screen
-	g.msghub.Send(sessionsTopic, SessionToScreenMessage{
+	g.msghub.Send(messaging.SessionsTopic, SessionToScreenMessage{
 		sessionid:  msg.sessionid,
 		nextscreen: "wait-for-question-end",
 	})
 
-	encoded, err := convertToJSON(&answersUpdate)
+	encoded, err := common.ConvertToJSON(&answersUpdate)
 	if err != nil {
 		log.Printf("error converting players-answered payload to JSON: %v", err)
 		return true
@@ -562,7 +590,7 @@ func (g *Games) processRegisterAnswerMessage(message interface{}) bool {
 		return true
 	}
 
-	g.msghub.Send(sessionsTopic, SessionMessage{
+	g.msghub.Send(messaging.SessionsTopic, SessionMessage{
 		sessionid: host,
 		message:   "players-answered " + encoded,
 	})
@@ -580,13 +608,13 @@ func (g *Games) processQueryPlayerResultsMessage(message interface{}) bool {
 
 	game, err := g.Get(msg.pin)
 	if err != nil {
-		g.msghub.Send(sessionsTopic, SetSessionGamePinMessage{
+		g.msghub.Send(messaging.SessionsTopic, SetSessionGamePinMessage{
 			sessionid: msg.sessionid,
 			pin:       -1,
 		})
 
 		if _, ok := err.(*common.NoSuchGameError); ok {
-			g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
+			g.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
 				sessionid:  msg.sessionid,
 				message:    err.Error(),
 				nextscreen: "entrance",
@@ -594,7 +622,7 @@ func (g *Games) processQueryPlayerResultsMessage(message interface{}) bool {
 			return true
 		}
 
-		g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
+		g.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
 			sessionid:  msg.sessionid,
 			message:    "error fetching game: " + err.Error(),
 			nextscreen: "entrance",
@@ -606,11 +634,11 @@ func (g *Games) processQueryPlayerResultsMessage(message interface{}) bool {
 	_, correct := game.CorrectPlayers[msg.sessionid]
 	score, ok := game.Players[msg.sessionid]
 	if !ok {
-		g.msghub.Send(sessionsTopic, SetSessionGamePinMessage{
+		g.msghub.Send(messaging.SessionsTopic, SetSessionGamePinMessage{
 			sessionid: msg.sessionid,
 			pin:       -1,
 		})
-		g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
+		g.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
 			sessionid:  msg.sessionid,
 			message:    "you do not have a score in this game",
 			nextscreen: "entrance",
@@ -626,13 +654,13 @@ func (g *Games) processQueryPlayerResultsMessage(message interface{}) bool {
 		Score:   score,
 	}
 
-	encoded, err := convertToJSON(&playerResults)
+	encoded, err := common.ConvertToJSON(&playerResults)
 	if err != nil {
 		log.Printf("error converting player-results payload to JSON: %v", err)
 		return true
 	}
 
-	g.msghub.Send(clientHubTopic, ClientMessage{
+	g.msghub.Send(messaging.ClientHubTopic, ClientMessage{
 		client:  msg.client,
 		message: "player-results " + encoded,
 	})
@@ -648,15 +676,15 @@ func (g *Games) processQueryDisplayChoicesMessage(message interface{}) bool {
 		return false
 	}
 
-	currentQuestion, err := g.GetCurrentQuestion(msg.pin)
+	currentQuestion, err := g.getCurrentQuestion(msg.pin)
 	if err != nil {
-		g.msghub.Send(sessionsTopic, SetSessionGamePinMessage{
+		g.msghub.Send(messaging.SessionsTopic, SetSessionGamePinMessage{
 			sessionid: msg.sessionid,
 			pin:       -1,
 		})
 
 		if _, ok := err.(*common.NoSuchGameError); ok {
-			g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
+			g.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
 				sessionid:  msg.sessionid,
 				message:    err.Error(),
 				nextscreen: "entrance",
@@ -664,7 +692,7 @@ func (g *Games) processQueryDisplayChoicesMessage(message interface{}) bool {
 			return true
 		}
 
-		g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
+		g.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
 			sessionid:  msg.sessionid,
 			message:    "error retrieving current question: " + err.Error(),
 			nextscreen: "",
@@ -672,7 +700,7 @@ func (g *Games) processQueryDisplayChoicesMessage(message interface{}) bool {
 		return true
 	}
 
-	g.msghub.Send(clientHubTopic, ClientMessage{
+	g.msghub.Send(messaging.ClientHubTopic, ClientMessage{
 		client:  msg.client,
 		message: fmt.Sprintf("display-choices %d", len(currentQuestion.Answers)),
 	})
@@ -686,9 +714,9 @@ func (g *Games) processHostShowGameResultsMessage(message interface{}) bool {
 		return false
 	}
 
-	winners, err := g.GetWinners(msg.pin)
+	winners, err := g.getWinners(msg.pin)
 	if err != nil {
-		g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
+		g.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
 			sessionid:  msg.sessionid,
 			message:    "error retrieving game winners: " + err.Error(),
 			nextscreen: "",
@@ -697,9 +725,9 @@ func (g *Games) processHostShowGameResultsMessage(message interface{}) bool {
 		return true
 	}
 
-	encoded, err := convertToJSON(&winners)
+	encoded, err := common.ConvertToJSON(&winners)
 	if err != nil {
-		g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
+		g.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
 			sessionid:  msg.sessionid,
 			message:    "error converting show-winners payload to JSON: " + err.Error(),
 			nextscreen: "",
@@ -708,7 +736,7 @@ func (g *Games) processHostShowGameResultsMessage(message interface{}) bool {
 	}
 	log.Printf("winners for game %d: %s", msg.pin, encoded)
 
-	g.msghub.Send(clientHubTopic, ClientMessage{
+	g.msghub.Send(messaging.ClientHubTopic, ClientMessage{
 		client:  msg.client,
 		message: "show-winners " + encoded,
 	})
@@ -722,21 +750,21 @@ func (g *Games) processHostShowQuestionMessage(message interface{}) bool {
 		return false
 	}
 
-	currentQuestion, err := g.GetCurrentQuestion(msg.pin)
+	currentQuestion, err := g.getCurrentQuestion(msg.pin)
 	if err != nil {
 		// if the host disconnected while the question was live, and if
 		// the game state has now changed, we may need to move the host to
 		// the relevant screen
 		unexpectedState, ok := err.(*common.UnexpectedStateError)
 		if ok && unexpectedState.CurrentState == common.ShowResults {
-			g.msghub.Send(sessionsTopic, SessionToScreenMessage{
+			g.msghub.Send(messaging.SessionsTopic, SessionToScreenMessage{
 				sessionid:  msg.sessionid,
 				nextscreen: "show-results",
 			})
 			return true
 		}
 
-		g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
+		g.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
 			sessionid:  msg.sessionid,
 			message:    "error retrieving question: " + err.Error(),
 			nextscreen: "",
@@ -744,9 +772,9 @@ func (g *Games) processHostShowQuestionMessage(message interface{}) bool {
 		return true
 	}
 
-	encoded, err := convertToJSON(&currentQuestion)
+	encoded, err := common.ConvertToJSON(&currentQuestion)
 	if err != nil {
-		g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
+		g.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
 			sessionid:  msg.sessionid,
 			message:    "error converting question to JSON: " + err.Error(),
 			nextscreen: "",
@@ -754,7 +782,7 @@ func (g *Games) processHostShowQuestionMessage(message interface{}) bool {
 		return true
 	}
 
-	g.msghub.Send(clientHubTopic, ClientMessage{
+	g.msghub.Send(messaging.ClientHubTopic, ClientMessage{
 		client:  msg.client,
 		message: "host-show-question " + encoded,
 	})
@@ -769,7 +797,7 @@ func (g *Games) processSendGameMetadataMessage(message interface{}) bool {
 	}
 	game, err := g.Get(msg.pin)
 	if err != nil {
-		g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
+		g.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
 			sessionid:  msg.sessionid,
 			message:    fmt.Sprintf("could not retrieve game %d", msg.pin),
 			nextscreen: "entrance",
@@ -790,9 +818,9 @@ func (g *Games) processSendGameMetadataMessage(message interface{}) bool {
 		Players: game.GetPlayerNames(),
 	}
 
-	encoded, err := convertToJSON(&gameMetadata)
+	encoded, err := common.ConvertToJSON(&gameMetadata)
 	if err != nil {
-		g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
+		g.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
 			sessionid:  msg.sessionid,
 			message:    "error converting lobby-game-metadata payload to JSON: " + err.Error(),
 			nextscreen: "",
@@ -800,7 +828,7 @@ func (g *Games) processSendGameMetadataMessage(message interface{}) bool {
 		return true
 	}
 
-	g.msghub.Send(clientHubTopic, ClientMessage{
+	g.msghub.Send(messaging.ClientHubTopic, ClientMessage{
 		client:  msg.client,
 		message: "lobby-game-metadata " + encoded,
 	})
@@ -814,8 +842,8 @@ func (g *Games) processAddPlayerToGameMessage(message interface{}) bool {
 	if !ok {
 		return false
 	}
-	if err := g.AddPlayerToGame(msg); err != nil {
-		g.msghub.Send(sessionsTopic, ErrorToSessionMessage{
+	if err := g.addPlayerToGame(msg); err != nil {
+		g.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
 			sessionid:  msg.sessionid,
 			message:    "could not add player to game: " + err.Error(),
 			nextscreen: "entrance",
@@ -823,8 +851,8 @@ func (g *Games) processAddPlayerToGameMessage(message interface{}) bool {
 		return true
 	}
 
-	g.msghub.Send(sessionsTopic, BindGameToSessionMessage(msg))
-	g.msghub.Send(sessionsTopic, SessionToScreenMessage{
+	g.msghub.Send(messaging.SessionsTopic, BindGameToSessionMessage(msg))
+	g.msghub.Send(messaging.SessionsTopic, SessionToScreenMessage{
 		sessionid:  msg.sessionid,
 		nextscreen: "wait-for-game-start",
 	})
@@ -840,14 +868,14 @@ func (g *Games) processAddPlayerToGameMessage(message interface{}) bool {
 		return true
 	}
 	players := game.GetPlayerNames()
-	encoded, err := convertToJSON(&players)
+	encoded, err := common.ConvertToJSON(&players)
 
 	if err != nil {
 		log.Printf("error encoding player names: %v", err)
 		return true
 	}
 
-	g.msghub.Send(sessionsTopic, SessionMessage{
+	g.msghub.Send(messaging.SessionsTopic, SessionMessage{
 		sessionid: host,
 		message:   "participants-list " + encoded,
 	})
@@ -869,6 +897,7 @@ func (g *Games) persist(game *common.Game) {
 	}
 }
 
+// called by the REST API
 func (g *Games) GetAll() []common.Game {
 	keys, err := g.engine.GetKeys("game")
 	if err != nil {
@@ -893,7 +922,7 @@ func (g *Games) GetAll() []common.Game {
 	return all
 }
 
-func (g *Games) Add(host string) (int, error) {
+func (g *Games) add(host string) (int, error) {
 	game := common.Game{
 		Host:            host,
 		Players:         make(map[string]int),
@@ -956,6 +985,7 @@ func (g *Games) getGamePointer(pin int) (*common.Game, error) {
 	return game, nil
 }
 
+// called by the REST API
 func (g *Games) Get(pin int) (common.Game, error) {
 	gp, err := g.getGamePointer(pin)
 	if err != nil {
@@ -965,23 +995,7 @@ func (g *Games) Get(pin int) (common.Game, error) {
 	return gp.Copy(), nil
 }
 
-func (g *Games) GetHostForGame(pin int) string {
-	game, err := g.getGamePointer(pin)
-	if err != nil {
-		return ""
-	}
-	return game.Host
-}
-
-func (g *Games) GetPlayersForGame(pin int) []string {
-	game, err := g.Get(pin)
-	if err != nil {
-		return []string{}
-	}
-	return game.GetPlayers()
-}
-
-func (g *Games) Update(game common.Game) error {
+func (g *Games) update(game common.Game) {
 	p := &game
 
 	g.mutex.Lock()
@@ -989,11 +1003,9 @@ func (g *Games) Update(game common.Game) error {
 	g.mutex.Unlock()
 
 	g.persist(p)
-
-	return nil
 }
 
-func (g *Games) Delete(pin int) {
+func (g *Games) delete(pin int) {
 	g.mutex.Lock()
 	delete(g.all, pin)
 	g.mutex.Unlock()
@@ -1004,7 +1016,7 @@ func (g *Games) Delete(pin int) {
 
 }
 
-func (g *Games) AddPlayerToGame(msg AddPlayerToGameMessage) error {
+func (g *Games) addPlayerToGame(msg AddPlayerToGameMessage) error {
 	game, err := g.getGamePointer(msg.pin)
 	if err != nil {
 		return common.NewNoSuchGameError(msg.pin)
@@ -1023,7 +1035,7 @@ func (g *Games) AddPlayerToGame(msg AddPlayerToGameMessage) error {
 	return nil
 }
 
-func (g *Games) SetGameQuiz(pin int, quiz common.Quiz) {
+func (g *Games) setGameQuiz(pin int, quiz common.Quiz) {
 	game, err := g.getGamePointer(pin)
 	if err != nil {
 		return
@@ -1037,22 +1049,8 @@ func (g *Games) SetGameQuiz(pin int, quiz common.Quiz) {
 	g.persist(game)
 }
 
-func (g *Games) DeletePlayerFromGame(sessionid string, pin int) {
-	game, err := g.getGamePointer(pin)
-	if err != nil {
-		return
-	}
-
-	g.mutex.Lock()
-	game.DeletePlayer(sessionid)
-	g.all[pin] = game // this is redundant
-	g.mutex.Unlock()
-
-	g.persist(game)
-}
-
 // Advances the game state to the next state - returns the new state
-func (g *Games) NextState(pin int) (int, error) {
+func (g *Games) nextState(pin int) (int, error) {
 	game, err := g.getGamePointer(pin)
 	if err != nil {
 		return 0, common.NewNoSuchGameError(pin)
@@ -1066,9 +1064,9 @@ func (g *Games) NextState(pin int) (int, error) {
 }
 
 // A special instance of NextState() - if we are in the QuestionInProgress
-// state, change the state to ShowResults.
-// If we are already in ShowResults, do not change the state.
-func (g *Games) ShowResults(pin int) error {
+// state, change the state to showResults.
+// If we are already in showResults, do not change the state.
+func (g *Games) showResults(pin int) error {
 	game, err := g.getGamePointer(pin)
 	if err != nil {
 		return common.NewNoSuchGameError(pin)
@@ -1084,7 +1082,7 @@ func (g *Games) ShowResults(pin int) error {
 }
 
 // Returns - questionIndex, number of seconds left, question, error
-func (g *Games) GetCurrentQuestion(pin int) (common.GameCurrentQuestion, error) {
+func (g *Games) getCurrentQuestion(pin int) (common.GameCurrentQuestion, error) {
 	game, err := g.getGamePointer(pin)
 	if err != nil {
 		return common.GameCurrentQuestion{}, common.NewNoSuchGameError(pin)
@@ -1100,7 +1098,7 @@ func (g *Games) GetCurrentQuestion(pin int) (common.GameCurrentQuestion, error) 
 	return currentQuestion, err
 }
 
-func (g *Games) RegisterAnswer(pin int, sessionid string, answerIndex int) (common.AnswersUpdate, error) {
+func (g *Games) registerAnswer(pin int, sessionid string, answerIndex int) (common.AnswersUpdate, error) {
 	game, err := g.getGamePointer(pin)
 	if err != nil {
 		return common.AnswersUpdate{}, common.NewNoSuchGameError(pin)
@@ -1115,7 +1113,7 @@ func (g *Games) RegisterAnswer(pin int, sessionid string, answerIndex int) (comm
 	return update, err
 }
 
-func (g *Games) GetQuestionResults(pin int) (common.QuestionResults, error) {
+func (g *Games) getQuestionResults(pin int) (common.QuestionResults, error) {
 	game, err := g.getGamePointer(pin)
 	if err != nil {
 		return common.QuestionResults{}, common.NewNoSuchGameError(pin)
@@ -1126,7 +1124,7 @@ func (g *Games) GetQuestionResults(pin int) (common.QuestionResults, error) {
 	return game.GetQuestionResults()
 }
 
-func (g *Games) GetWinners(pin int) ([]common.PlayerScore, error) {
+func (g *Games) getWinners(pin int) ([]common.PlayerScore, error) {
 	game, err := g.getGamePointer(pin)
 	if err != nil {
 		return []common.PlayerScore{}, common.NewNoSuchGameError(pin)
@@ -1135,13 +1133,4 @@ func (g *Games) GetWinners(pin int) ([]common.PlayerScore, error) {
 	g.mutex.RLock()
 	defer g.mutex.RUnlock()
 	return game.GetWinners(), nil
-}
-
-func (g *Games) GetGameState(pin int) (int, error) {
-	game, err := g.getGamePointer(pin)
-	if err != nil {
-		return 0, common.NewNoSuchGameError(pin)
-	}
-
-	return game.GetGameState(), nil
 }

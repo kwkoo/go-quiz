@@ -16,7 +16,7 @@ type QuizApp interface {
 	GetQuizzes() []common.Quiz
 	GetQuiz(int) (common.Quiz, error)
 	DeleteQuiz(int)
-	AddQuiz(common.Quiz) (common.Quiz, error)
+	AddQuiz(common.Quiz) error
 	UpdateQuiz(common.Quiz) error
 	ExtendSessionExpiry(string)
 	GetSessions() []common.Session
@@ -25,7 +25,7 @@ type QuizApp interface {
 	GetGames() []common.Game
 	GetGame(int) (common.Game, error)
 	DeleteGame(int)
-	UpdateGame(common.Game) error
+	UpdateGame(common.Game)
 	RemoveGameFromSessions([]string)
 	SendClientsToScreen([]string, string)
 }
@@ -114,7 +114,7 @@ func (api *RestApi) Quiz(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		for _, q := range toImport {
-			if _, err := api.hub.AddQuiz(q); err != nil {
+			if err := api.hub.AddQuiz(q); err != nil {
 				streamResponse(w, false, fmt.Sprintf("error adding quiz: %v", err))
 				continue
 			}
@@ -132,7 +132,7 @@ func (api *RestApi) Quiz(w http.ResponseWriter, r *http.Request) {
 
 	if toImport.Id == 0 {
 		// no ID, so treat this as an add operation
-		if _, err := api.hub.AddQuiz(toImport); err != nil {
+		if err := api.hub.AddQuiz(toImport); err != nil {
 			streamResponse(w, false, fmt.Sprintf("error adding quiz: %v", err))
 			return
 		}
@@ -141,10 +141,7 @@ func (api *RestApi) Quiz(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// update
-	if err := api.hub.UpdateQuiz(toImport); err != nil {
-		streamResponse(w, false, fmt.Sprintf("error updating quiz: %v", err))
-		return
-	}
+	api.hub.UpdateQuiz(toImport)
 	streamResponse(w, true, "")
 }
 
@@ -275,10 +272,7 @@ func (api *RestApi) Game(w http.ResponseWriter, r *http.Request) {
 			streamResponse(w, false, fmt.Sprintf("error decoding game JSON: %v", err))
 			return
 		}
-		if err := api.hub.UpdateGame(game); err != nil {
-			streamResponse(w, false, fmt.Sprintf("error updating game: %v", err))
-			return
-		}
+		api.hub.UpdateGame(game)
 		streamResponse(w, true, "")
 		return
 	}

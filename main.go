@@ -13,6 +13,7 @@ import (
 	"github.com/kwkoo/configparser"
 	"github.com/kwkoo/go-quiz/internal"
 	"github.com/kwkoo/go-quiz/internal/api"
+	"github.com/kwkoo/go-quiz/internal/messaging"
 )
 
 const authRealm = "Quiz Admin"
@@ -63,7 +64,7 @@ func main() {
 	cookieGen := api.InitCookieGenerator(fileServer)
 	http.HandleFunc("/", cookieGen.ServeHTTP)
 
-	mh := internal.InitMessageHub()
+	mh := messaging.InitMessageHub()
 
 	hub := internal.NewHub(mh, config.RedisHost, config.RedisPassword, auth, config.SessionTimeout)
 	go hub.Run()

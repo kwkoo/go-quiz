@@ -9,16 +9,17 @@ import (
 	"sync"
 
 	"github.com/kwkoo/go-quiz/internal/common"
+	"github.com/kwkoo/go-quiz/internal/messaging"
 )
 
 type Quizzes struct {
 	all    map[int]common.Quiz
 	mutex  sync.RWMutex
 	engine *PersistenceEngine
-	msghub *MessageHub
+	msghub *messaging.MessageHub
 }
 
-func InitQuizzes(msghub *MessageHub, engine *PersistenceEngine) (*Quizzes, error) {
+func InitQuizzes(msghub *messaging.MessageHub, engine *PersistenceEngine) (*Quizzes, error) {
 	if engine == nil {
 		log.Print("initializing quizzes with no persistence engine")
 		return &Quizzes{all: make(map[int]common.Quiz)}, nil
@@ -56,7 +57,7 @@ func InitQuizzes(msghub *MessageHub, engine *PersistenceEngine) (*Quizzes, error
 
 func (q *Quizzes) Run() {
 	shutdownChan := q.msghub.GetShutdownChan()
-	topic := q.msghub.GetTopic(quizzesTopic)
+	topic := q.msghub.GetTopic(messaging.QuizzesTopic)
 	for {
 		select {
 		case <-shutdownChan:
@@ -70,14 +71,26 @@ func (q *Quizzes) Run() {
 			if q.processSendQuizzesToClientMessage(msg) {
 				continue
 			}
-			if q.processLookupQuizForGame(msg) {
+			if q.processLookupQuizForGameMessage(msg) {
+				continue
+			}
+			if q.processDeleteQuizMessage(msg) {
 				continue
 			}
 		}
 	}
 }
 
-func (q *Quizzes) processLookupQuizForGame(message interface{}) bool {
+func (q *Quizzes) processDeleteQuizMessage(message interface{}) bool {
+	msg, ok := message.(DeleteQuizMessage)
+	if !ok {
+		return false
+	}
+	q.delete(msg.quizid)
+	return true
+}
+
+func (q *Quizzes) processLookupQuizForGameMessage(message interface{}) bool {
 	msg, ok := message.(LookupQuizForGameMessage)
 	if !ok {
 		return false
@@ -85,7 +98,7 @@ func (q *Quizzes) processLookupQuizForGame(message interface{}) bool {
 
 	quiz, err := q.Get(msg.quizid)
 	if err != nil {
-		q.msghub.Send(sessionsTopic, ErrorToSessionMessage{
+		q.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
 			sessionid:  msg.sessionid,
 			message:    "error getting quiz in new game: " + err.Error(),
 			nextscreen: "host-select-quiz",
@@ -93,12 +106,12 @@ func (q *Quizzes) processLookupQuizForGame(message interface{}) bool {
 		return true
 	}
 
-	q.msghub.Send(gamesTopic, SetQuizForGameMessage{
+	q.msghub.Send(messaging.GamesTopic, SetQuizForGameMessage{
 		pin:  msg.pin,
 		quiz: quiz,
 	})
 
-	q.msghub.Send(sessionsTopic, SessionToScreenMessage{
+	q.msghub.Send(messaging.SessionsTopic, SessionToScreenMessage{
 		sessionid:  msg.sessionid,
 		nextscreen: "host-game-lobby",
 	})
@@ -124,22 +137,23 @@ func (q *Quizzes) processSendQuizzesToClientMessage(message interface{}) bool {
 		})
 	}
 
-	encoded, err := convertToJSON(&ml)
+	encoded, err := common.ConvertToJSON(&ml)
 	if err != nil {
-		q.msghub.Send(sessionsTopic, ErrorToSessionMessage{
+		q.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
 			sessionid:  msg.sessionid,
 			message:    fmt.Sprintf("error encoding json: %v", err),
 			nextscreen: "host-select-quiz",
 		})
 		return true
 	}
-	q.msghub.Send(clientHubTopic, ClientMessage{
+	q.msghub.Send(messaging.ClientHubTopic, ClientMessage{
 		client:  msg.client,
 		message: "all-quizzes " + encoded,
 	})
 	return true
 }
 
+// called by REST API
 func (q *Quizzes) GetQuizzes() []common.Quiz {
 	q.mutex.RLock()
 	defer q.mutex.RUnlock()
@@ -159,6 +173,7 @@ func (q *Quizzes) GetQuizzes() []common.Quiz {
 	return r
 }
 
+// called by REST API
 func (q *Quizzes) Get(id int) (common.Quiz, error) {
 	q.mutex.RLock()
 	defer q.mutex.RUnlock()
@@ -169,7 +184,7 @@ func (q *Quizzes) Get(id int) (common.Quiz, error) {
 	return quiz, nil
 }
 
-func (q *Quizzes) Delete(id int) {
+func (q *Quizzes) delete(id int) {
 	q.mutex.Lock()
 	delete(q.all, id)
 	q.mutex.Unlock()
@@ -179,29 +194,31 @@ func (q *Quizzes) Delete(id int) {
 	}
 }
 
-func (q *Quizzes) Add(quiz common.Quiz) (common.Quiz, error) {
+// called by REST API
+func (q *Quizzes) Add(quiz common.Quiz) error {
 	var err error
 	quiz.Id, err = q.nextID()
 	if err != nil {
-		return common.Quiz{}, err
+		return err
 	}
 
 	if q.engine != nil {
 		encoded, err := quiz.Marshal()
 		if err != nil {
-			return common.Quiz{}, fmt.Errorf("error converting quiz to JSON: %v", err)
+			return fmt.Errorf("error converting quiz to JSON: %v", err)
 		}
 		if err := q.engine.Set(fmt.Sprintf("quiz:%d", quiz.Id), encoded, 0); err != nil {
-			return common.Quiz{}, fmt.Errorf("error persisting quiz to redis: %v", err)
+			return fmt.Errorf("error persisting quiz to redis: %v", err)
 		}
 	}
 
 	q.mutex.Lock()
 	q.all[quiz.Id] = quiz
 	q.mutex.Unlock()
-	return quiz, nil
+	return nil
 }
 
+// called by REST API
 func (q *Quizzes) Update(quiz common.Quiz) error {
 	q.mutex.Lock()
 	q.all[quiz.Id] = quiz

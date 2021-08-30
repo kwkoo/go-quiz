@@ -1,4 +1,4 @@
-package internal
+package messaging
 
 import (
 	"log"
@@ -12,11 +12,11 @@ const chanSize = 20
 
 // topics
 const (
-	incomingMessageTopic = "from-clients"
-	clientHubTopic       = "client-hub"
-	sessionsTopic        = "sessions-hub"
-	gamesTopic           = "games-hub"
-	quizzesTopic         = "quizzes"
+	IncomingMessageTopic = "from-clients"
+	ClientHubTopic       = "client-hub"
+	SessionsTopic        = "sessions-hub"
+	GamesTopic           = "games-hub"
+	QuizzesTopic         = "quizzes"
 )
 
 type MessageHub struct {
