@@ -102,17 +102,18 @@ func (h *Hub) Run() {
 
 		case msg, ok := <-clientHub:
 			if !ok {
-				log.Print("received empty message from client-hub")
+				log.Printf("received empty message from %s", messaging.ClientHubTopic)
 				continue
 			}
-			if h.processClientMessage(msg) {
-				continue
-			}
-			if h.processClientErrorMessage(msg) {
-				continue
-			}
-			if h.processSetSessionIDForClientMessage(msg) {
-				continue
+			switch m := msg.(type) {
+			case ClientMessage:
+				h.processClientMessage(m)
+			case ClientErrorMessage:
+				h.processClientErrorMessage(m)
+			case SetSessionIDForClientMessage:
+				h.processSetSessionIDForClientMessage(m)
+			default:
+				log.Printf("unrecognized message type %T received on %s topic", msg, messaging.ClientHubTopic)
 			}
 		}
 	}
@@ -134,32 +135,16 @@ func (h *Hub) deregisterClient(client *Client) {
 	}
 }
 
-func (h *Hub) processSetSessionIDForClientMessage(message interface{}) bool {
-	msg, ok := message.(SetSessionIDForClientMessage)
-	if !ok {
-		return false
-	}
-
+func (h *Hub) processSetSessionIDForClientMessage(msg SetSessionIDForClientMessage) {
 	msg.client.sessionid = msg.sessionid
-	return true
 }
 
-func (h *Hub) processClientMessage(message interface{}) bool {
-	msg, ok := message.(ClientMessage)
-	if !ok {
-		return false
-	}
+func (h *Hub) processClientMessage(msg ClientMessage) {
 	h.sendMessageToClient(msg.client, msg.message)
-	return true
 }
 
-func (h *Hub) processClientErrorMessage(message interface{}) bool {
-	msg, ok := message.(ClientErrorMessage)
-	if !ok {
-		return false
-	}
+func (h *Hub) processClientErrorMessage(msg ClientErrorMessage) {
 	h.errorMessageToClient(msg.client, msg.message, msg.nextscreen)
-	return true
 }
 
 func (h *Hub) processMessage(m *ClientCommand) {

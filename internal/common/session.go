@@ -9,7 +9,7 @@ import (
 
 type Session struct {
 	Id      string      `json:"id"`
-	Client  interface{} `json:"client"` // ugly hack to avoid circular imports
+	Client  interface{} `json:"client"` // ugly hack to avoid having to import the internal package
 	Screen  string      `json:"screen"`
 	Gamepin int         `json:"gamepin"`
 	Name    string      `json:"name"`

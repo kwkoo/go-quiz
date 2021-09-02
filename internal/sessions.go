@@ -62,7 +62,7 @@ func InitSessions(msghub *messaging.MessageHub, engine *PersistenceEngine, auth 
 			case <-timeout:
 				log.Print("running session reaper")
 				sessions.expireSessions()
-				timeout = time.After(5 * time.Second)
+				timeout = time.After(reaperInterval * time.Second)
 			default:
 				time.Sleep(3 * time.Second)
 			}
@@ -81,46 +81,43 @@ func (s *Sessions) Run() {
 		select {
 		case msg, ok := <-fromClients:
 			if !ok {
-				log.Print("received empty message from from-clients")
+				log.Printf("received empty message from %s", messaging.IncomingMessageTopic)
 				continue
 			}
-			if s.processClientCommand(msg) {
-				continue
+			switch m := msg.(type) {
+			case *ClientCommand:
+				s.processClientCommand(m)
+			default:
+				log.Printf("unrecognized message type %T received on %s topic", msg, messaging.IncomingMessageTopic)
 			}
 		case msg, ok := <-sessionsHub:
 			if !ok {
-				log.Print("received empty message from sessions-hub")
+				log.Printf("received empty message from %s", messaging.SessionsTopic)
 				continue
 			}
-			if s.processErrorToSessionMessage(msg) {
-				continue
-			}
-			if s.processBindGameToSessionMessage(msg) {
-				continue
-			}
-			if s.processSessionToScreenMessage(msg) {
-				continue
-			}
-			if s.processSetSessionScreenMessage(msg) {
-				continue
-			}
-			if s.processSessionMessage(msg) {
-				continue
-			}
-			if s.processSetSessionGamePinMessage(msg) {
-				continue
-			}
-			if s.processDeregisterGameFromSessionsMessage(msg) {
-				continue
-			}
-			if s.processSetSessionIDForClientMessage(msg) {
-				continue
-			}
-			if s.processExtendSessionExpiryMessage(msg) {
-				continue
-			}
-			if s.processDeleteSessionMessage(msg) {
-				continue
+			switch m := msg.(type) {
+			case ErrorToSessionMessage:
+				s.processErrorToSessionMessage(m)
+			case BindGameToSessionMessage:
+				s.processBindGameToSessionMessage(m)
+			case SessionToScreenMessage:
+				s.processSessionToScreenMessage(m)
+			case SetSessionScreenMessage:
+				s.processSetSessionScreenMessage(m)
+			case SessionMessage:
+				s.processSessionMessage(m)
+			case SetSessionGamePinMessage:
+				s.processSetSessionGamePinMessage(m)
+			case DeregisterGameFromSessionsMessage:
+				s.processDeregisterGameFromSessionsMessage(m)
+			case SetSessionIDForClientMessage:
+				s.processSetSessionIDForClientMessage(m)
+			case ExtendSessionExpiryMessage:
+				s.processExtendSessionExpiryMessage(m)
+			case DeleteSessionMessage:
+				s.processDeleteSessionMessage(m)
+			default:
+				log.Printf("unrecognized message type %T received on %s topic", msg, messaging.SessionsTopic)
 			}
 		case <-shutdownChan:
 			log.Print("shutting down sessions handler")
@@ -130,86 +127,47 @@ func (s *Sessions) Run() {
 	}
 }
 
-func (s *Sessions) processDeleteSessionMessage(message interface{}) bool {
-	msg, ok := message.(DeleteSessionMessage)
-	if !ok {
-		return false
-	}
-
+func (s *Sessions) processDeleteSessionMessage(msg DeleteSessionMessage) {
 	s.deleteSession(msg.sessionid)
-	return true
 }
 
-func (s *Sessions) processSetSessionIDForClientMessage(message interface{}) bool {
-	msg, ok := message.(SetSessionIDForClientMessage)
-	if !ok {
-		return false
-	}
-
+func (s *Sessions) processSetSessionIDForClientMessage(msg SetSessionIDForClientMessage) {
 	s.updateClientForSession(msg.sessionid, msg.client)
-	return true
 }
 
-func (s *Sessions) processDeregisterGameFromSessionsMessage(message interface{}) bool {
-	msg, ok := message.(DeregisterGameFromSessionsMessage)
-	if !ok {
-		return false
-	}
+func (s *Sessions) processDeregisterGameFromSessionsMessage(msg DeregisterGameFromSessionsMessage) {
 	for _, sessionid := range msg.sessions {
 		s.deregisterGameFromSession(sessionid)
 	}
-	return true
 }
 
-func (s *Sessions) processSetSessionGamePinMessage(message interface{}) bool {
-	msg, ok := message.(SetSessionGamePinMessage)
-	if !ok {
-		return false
-	}
+func (s *Sessions) processSetSessionGamePinMessage(msg SetSessionGamePinMessage) {
 	s.setSessionGamePin(msg.sessionid, msg.pin)
-	return true
 }
 
-func (s *Sessions) processSessionMessage(message interface{}) bool {
-	msg, ok := message.(SessionMessage)
-	if !ok {
-		return false
-	}
-
+func (s *Sessions) processSessionMessage(msg SessionMessage) {
 	sess := s.GetSession(msg.sessionid)
 	if sess == nil {
 		// session doesn't exist
-		return true
+		log.Printf("session %s does not exist", msg.sessionid)
+		return
 	}
 	s.msghub.Send(messaging.ClientHubTopic, ClientMessage{
 		client:  sess.Client.(*Client),
 		message: msg.message,
 	})
-	return true
 }
 
-func (s *Sessions) processSetSessionScreenMessage(message interface{}) bool {
-	msg, ok := message.(SetSessionScreenMessage)
-	if !ok {
-		return false
-	}
+func (s *Sessions) processSetSessionScreenMessage(msg SetSessionScreenMessage) {
 	s.setSessionScreen(msg.sessionid, msg.nextscreen)
-
-	return true
 }
 
-// returns true if argument is SessionToScreenMessage
-func (s *Sessions) processSessionToScreenMessage(message interface{}) bool {
-	msg, ok := message.(SessionToScreenMessage)
-	if !ok {
-		return false
-	}
-
+func (s *Sessions) processSessionToScreenMessage(msg SessionToScreenMessage) {
 	session := s.GetSession(msg.sessionid)
 	if session == nil {
 		// session doesn't exist
 		log.Printf("session %s does not exist", msg.sessionid)
-		return true
+		return
 	}
 
 	// session is valid from this point on
@@ -257,28 +215,13 @@ func (s *Sessions) processSessionToScreenMessage(message interface{}) bool {
 		client:  session.Client.(*Client),
 		message: "screen " + msg.nextscreen,
 	})
-
-	return true
 }
 
-// returns true if argument is BindGameToSessionMessage
-func (s *Sessions) processBindGameToSessionMessage(message interface{}) bool {
-	msg, ok := message.(BindGameToSessionMessage)
-	if !ok {
-		return false
-	}
-
+func (s *Sessions) processBindGameToSessionMessage(msg BindGameToSessionMessage) {
 	s.registerSessionInGame(msg.sessionid, msg.name, msg.pin)
-	return true
 }
 
-// returns true if argument is ErrorToSessionMessage
-func (s *Sessions) processErrorToSessionMessage(message interface{}) bool {
-	msg, ok := message.(ErrorToSessionMessage)
-	if !ok {
-		return false
-	}
-
+func (s *Sessions) processErrorToSessionMessage(msg ErrorToSessionMessage) {
 	if msg.nextscreen != "" {
 		s.setSessionScreen(msg.sessionid, msg.nextscreen)
 	}
@@ -286,7 +229,8 @@ func (s *Sessions) processErrorToSessionMessage(message interface{}) bool {
 	client := s.getClientForSession(msg.sessionid)
 	if client == nil {
 		// session is not bound to a client
-		return true
+		log.Printf("session %s does not have a client", msg.sessionid)
+		return
 	}
 
 	s.msghub.Send(messaging.ClientHubTopic, ClientErrorMessage{
@@ -295,26 +239,13 @@ func (s *Sessions) processErrorToSessionMessage(message interface{}) bool {
 		message:    msg.message,
 		nextscreen: msg.nextscreen,
 	})
-	return true
 }
 
-func (s *Sessions) processExtendSessionExpiryMessage(message interface{}) bool {
-	msg, ok := message.(ExtendSessionExpiryMessage)
-	if !ok {
-		return false
-	}
-
+func (s *Sessions) processExtendSessionExpiryMessage(msg ExtendSessionExpiryMessage) {
 	s.extendSessionExpiry(msg.sessionid)
-	return true
 }
 
-// returns true if argument is *ClientCommand
-func (s *Sessions) processClientCommand(msg interface{}) bool {
-	m, ok := msg.(*ClientCommand)
-	if !ok {
-		return false
-	}
-
+func (s *Sessions) processClientCommand(m *ClientCommand) {
 	if m.client.sessionid == "" {
 		// client hasn't identified themselves yet
 		if m.cmd == "session" {
@@ -325,7 +256,7 @@ func (s *Sessions) processClientCommand(msg interface{}) bool {
 					message:    "invalid session ID",
 					nextscreen: "entrance",
 				})
-				return true
+				return
 			}
 
 			client := m.client
@@ -339,7 +270,7 @@ func (s *Sessions) processClientCommand(msg interface{}) bool {
 			if session == nil {
 				session = s.newSession(sessionid, m.client, "entrance")
 			} else {
-				if session.Client != nil {
+				if session.Client != nil && session.Client.(*Client) != nil {
 					s.msghub.Send(messaging.ClientHubTopic, ClientErrorMessage{
 						client:     m.client,
 						sessionid:  "",
@@ -352,7 +283,7 @@ func (s *Sessions) processClientCommand(msg interface{}) bool {
 						sessionid: "",
 					})
 
-					return true
+					return
 				}
 				s.updateClientForSession(session.Id, client)
 			}
@@ -360,13 +291,13 @@ func (s *Sessions) processClientCommand(msg interface{}) bool {
 				sessionid:  sessionid,
 				nextscreen: session.Screen,
 			})
-			return true
+			return
 		}
 		s.msghub.Send(messaging.ClientHubTopic, ClientMessage{
 			client:  m.client,
 			message: "register-session",
 		})
-		return true
+		return
 	}
 
 	client := m.client
@@ -385,7 +316,7 @@ func (s *Sessions) processClientCommand(msg interface{}) bool {
 			nextscreen: "",
 		})
 
-		return true
+		return
 	}
 
 	// session is valid from this point on
@@ -399,7 +330,7 @@ func (s *Sessions) processClientCommand(msg interface{}) bool {
 				nextscreen: "host-select-quiz",
 			})
 
-			return true
+			return
 		}
 
 		// invalid credentials
@@ -407,7 +338,7 @@ func (s *Sessions) processClientCommand(msg interface{}) bool {
 			client:  client,
 			message: "invalid-credentials",
 		})
-		return true
+		return
 
 	case "join-game":
 		pinfo := struct {
@@ -421,7 +352,7 @@ func (s *Sessions) processClientCommand(msg interface{}) bool {
 				message:    "could not decode json: " + err.Error(),
 				nextscreen: "entrance",
 			})
-			return true
+			return
 		}
 		if len(pinfo.Name) == 0 {
 			s.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
@@ -429,7 +360,7 @@ func (s *Sessions) processClientCommand(msg interface{}) bool {
 				message:    "name is missing",
 				nextscreen: "entrance",
 			})
-			return true
+			return
 		}
 
 		s.msghub.Send(messaging.GamesTopic, AddPlayerToGameMessage{
@@ -438,7 +369,7 @@ func (s *Sessions) processClientCommand(msg interface{}) bool {
 			pin:       pinfo.Pin,
 		})
 
-		return true
+		return
 
 	case "query-display-choices":
 		// player may have been disconnected - now they need to know how many
@@ -449,14 +380,14 @@ func (s *Sessions) processClientCommand(msg interface{}) bool {
 				message:    "could not get game pin for this session",
 				nextscreen: "entrance",
 			})
-			return true
+			return
 		}
 		s.msghub.Send(messaging.GamesTopic, QueryDisplayChoicesMessage{
 			client:    client,
 			sessionid: sessionid,
 			pin:       session.Gamepin,
 		})
-		return true
+		return
 
 	case "query-player-results":
 		// player may have been disconnected - now they need to know about
@@ -467,7 +398,7 @@ func (s *Sessions) processClientCommand(msg interface{}) bool {
 				message:    "could not get game pin for this session",
 				nextscreen: "entrance",
 			})
-			return true
+			return
 		}
 
 		s.msghub.Send(messaging.GamesTopic, QueryPlayerResultsMessage{
@@ -475,7 +406,7 @@ func (s *Sessions) processClientCommand(msg interface{}) bool {
 			sessionid: sessionid,
 			pin:       session.Gamepin,
 		})
-		return true
+		return
 
 	case "answer":
 		playerAnswer, err := strconv.Atoi(m.arg)
@@ -485,7 +416,7 @@ func (s *Sessions) processClientCommand(msg interface{}) bool {
 				message:    "could not parse answer",
 				nextscreen: "",
 			})
-			return true
+			return
 		}
 
 		if session.Gamepin < 0 {
@@ -494,7 +425,7 @@ func (s *Sessions) processClientCommand(msg interface{}) bool {
 				message:    "could not get game pin for this session",
 				nextscreen: "entrance",
 			})
-			return true
+			return
 		}
 
 		s.msghub.Send(messaging.GamesTopic, RegisterAnswerMessage{
@@ -503,14 +434,14 @@ func (s *Sessions) processClientCommand(msg interface{}) bool {
 			pin:       session.Gamepin,
 			answer:    playerAnswer,
 		})
-		return true
+		return
 
 	case "host-back-to-start":
 		s.msghub.Send(messaging.SessionsTopic, SessionToScreenMessage{
 			sessionid:  sessionid,
 			nextscreen: "entrance",
 		})
-		return true
+		return
 
 	case "cancel-game":
 		s.msghub.Send(messaging.GamesTopic, CancelGameMessage{
@@ -518,14 +449,14 @@ func (s *Sessions) processClientCommand(msg interface{}) bool {
 			sessionid: sessionid,
 			pin:       session.Gamepin,
 		})
-		return true
+		return
 
 	case "host-game":
 		s.msghub.Send(messaging.SessionsTopic, SessionToScreenMessage{
 			sessionid:  sessionid,
 			nextscreen: "host-select-quiz",
 		})
-		return true
+		return
 
 	case "host-game-lobby":
 		quizid, err := strconv.Atoi(m.arg)
@@ -535,7 +466,7 @@ func (s *Sessions) processClientCommand(msg interface{}) bool {
 				message:    "expected int argument",
 				nextscreen: "host-select-quiz",
 			})
-			return true
+			return
 		}
 
 		s.msghub.Send(messaging.GamesTopic, HostGameLobbyMessage{
@@ -543,7 +474,7 @@ func (s *Sessions) processClientCommand(msg interface{}) bool {
 			sessionid: sessionid,
 			quizid:    quizid,
 		})
-		return true
+		return
 
 	case "start-game":
 		s.msghub.Send(messaging.GamesTopic, StartGameMessage{
@@ -551,7 +482,7 @@ func (s *Sessions) processClientCommand(msg interface{}) bool {
 			sessionid: sessionid,
 			pin:       session.Gamepin,
 		})
-		return true
+		return
 
 	case "show-results":
 		s.msghub.Send(messaging.GamesTopic, ShowResultsMessage{
@@ -559,7 +490,7 @@ func (s *Sessions) processClientCommand(msg interface{}) bool {
 			sessionid: sessionid,
 			pin:       session.Gamepin,
 		})
-		return true
+		return
 
 	case "query-host-results":
 		s.msghub.Send(messaging.GamesTopic, QueryHostResultsMessage{
@@ -567,7 +498,7 @@ func (s *Sessions) processClientCommand(msg interface{}) bool {
 			sessionid: sessionid,
 			pin:       session.Gamepin,
 		})
-		return true
+		return
 
 	case "next-question":
 		s.msghub.Send(messaging.GamesTopic, NextQuestionMessage{
@@ -575,7 +506,7 @@ func (s *Sessions) processClientCommand(msg interface{}) bool {
 			sessionid: sessionid,
 			pin:       session.Gamepin,
 		})
-		return true
+		return
 
 	case "delete-game":
 		s.msghub.Send(messaging.GamesTopic, DeleteGameMessage{
@@ -583,7 +514,7 @@ func (s *Sessions) processClientCommand(msg interface{}) bool {
 			sessionid: sessionid,
 			pin:       session.Gamepin,
 		})
-		return true
+		return
 
 	default:
 		s.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
@@ -591,7 +522,7 @@ func (s *Sessions) processClientCommand(msg interface{}) bool {
 			message:    "invalid command",
 			nextscreen: "",
 		})
-		return true
+		return
 	}
 }
 

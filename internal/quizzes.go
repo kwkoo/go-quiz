@@ -67,37 +67,28 @@ func (q *Quizzes) Run() {
 			return
 		case msg, ok := <-topic:
 			if !ok {
-				log.Print("received empty message from quizzes")
+				log.Printf("received empty message from %s", messaging.QuizzesTopic)
 				continue
 			}
-			if q.processSendQuizzesToClientMessage(msg) {
-				continue
-			}
-			if q.processLookupQuizForGameMessage(msg) {
-				continue
-			}
-			if q.processDeleteQuizMessage(msg) {
-				continue
+			switch m := msg.(type) {
+			case SendQuizzesToClientMessage:
+				q.processSendQuizzesToClientMessage(m)
+			case LookupQuizForGameMessage:
+				q.processLookupQuizForGameMessage(m)
+			case DeleteQuizMessage:
+				q.processDeleteQuizMessage(m)
+			default:
+				log.Printf("unrecognized message type %T received on %s topic", msg, messaging.QuizzesTopic)
 			}
 		}
 	}
 }
 
-func (q *Quizzes) processDeleteQuizMessage(message interface{}) bool {
-	msg, ok := message.(DeleteQuizMessage)
-	if !ok {
-		return false
-	}
+func (q *Quizzes) processDeleteQuizMessage(msg DeleteQuizMessage) {
 	q.delete(msg.quizid)
-	return true
 }
 
-func (q *Quizzes) processLookupQuizForGameMessage(message interface{}) bool {
-	msg, ok := message.(LookupQuizForGameMessage)
-	if !ok {
-		return false
-	}
-
+func (q *Quizzes) processLookupQuizForGameMessage(msg LookupQuizForGameMessage) {
 	quiz, err := q.Get(msg.quizid)
 	if err != nil {
 		q.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
@@ -105,7 +96,7 @@ func (q *Quizzes) processLookupQuizForGameMessage(message interface{}) bool {
 			message:    "error getting quiz in new game: " + err.Error(),
 			nextscreen: "host-select-quiz",
 		})
-		return true
+		return
 	}
 
 	q.msghub.Send(messaging.GamesTopic, SetQuizForGameMessage{
@@ -117,16 +108,9 @@ func (q *Quizzes) processLookupQuizForGameMessage(message interface{}) bool {
 		sessionid:  msg.sessionid,
 		nextscreen: "host-game-lobby",
 	})
-
-	return true
 }
 
-func (q *Quizzes) processSendQuizzesToClientMessage(message interface{}) bool {
-	msg, ok := message.(SendQuizzesToClientMessage)
-	if !ok {
-		return false
-	}
-
+func (q *Quizzes) processSendQuizzesToClientMessage(msg SendQuizzesToClientMessage) {
 	type quizMeta struct {
 		Id   int    `json:"id"`
 		Name string `json:"name"`
@@ -146,13 +130,12 @@ func (q *Quizzes) processSendQuizzesToClientMessage(message interface{}) bool {
 			message:    fmt.Sprintf("error encoding json: %v", err),
 			nextscreen: "host-select-quiz",
 		})
-		return true
+		return
 	}
 	q.msghub.Send(messaging.ClientHubTopic, ClientMessage{
 		client:  msg.client,
 		message: "all-quizzes " + encoded,
 	})
-	return true
 }
 
 // called by REST API
