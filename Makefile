@@ -4,7 +4,7 @@ BASE:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 COVERAGEOUTPUT=coverage.out
 COVERAGEHTML=coverage.html
 IMAGENAME="ghcr.io/kwkoo/$(PACKAGE)"
-VERSION="0.1"
+VERSION="0.2"
 ADMINPASSWORD="password"
 SESSIONTIMEOUT=300
 

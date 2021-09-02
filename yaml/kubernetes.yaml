@@ -121,7 +121,7 @@ spec:
         app: quiz
     spec:
       containers:
-      - image: ghcr.io/kwkoo/go-quiz:0.1
+      - image: ghcr.io/kwkoo/go-quiz:0.2
         name: go-quiz
         imagePullPolicy: Always
         envFrom:
