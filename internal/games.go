@@ -122,7 +122,7 @@ func (g *Games) processUpdateGameMessage(msg UpdateGameMessage) {
 }
 
 func (g *Games) processDeleteGameMessage(msg DeleteGameMessage) {
-	if _, ok := g.ensureUserIsGameHost(msg.client, msg.sessionid, msg.pin); !ok {
+	if _, ok := g.ensureUserIsGameHost(msg.clientid, msg.sessionid, msg.pin); !ok {
 		log.Printf("could not delete game because %s is not a game host", msg.sessionid)
 		return
 	}
@@ -140,7 +140,7 @@ func (g *Games) processDeleteGameMessage(msg DeleteGameMessage) {
 }
 
 func (g *Games) processNextQuestionMessage(msg NextQuestionMessage) {
-	game, ok := g.ensureUserIsGameHost(msg.client, msg.sessionid, msg.pin)
+	game, ok := g.ensureUserIsGameHost(msg.clientid, msg.sessionid, msg.pin)
 	if !ok {
 		log.Printf("could not move game to next question because %s is not a game host", msg.sessionid)
 		return
@@ -198,7 +198,7 @@ func (g *Games) processNextQuestionMessage(msg NextQuestionMessage) {
 }
 
 func (g *Games) processQueryHostResultsMessage(msg QueryHostResultsMessage) {
-	g.sendQuestionResultsToHost(msg.client, msg.sessionid, msg.pin)
+	g.sendQuestionResultsToHost(msg.clientid, msg.sessionid, msg.pin)
 }
 
 // returns ok if successful
@@ -239,8 +239,8 @@ func (g *Games) sendQuestionResultsToHost(client uint64, sessionid string, pin i
 	}
 
 	g.msghub.Send(messaging.ClientHubTopic, ClientMessage{
-		client:  client,
-		message: "question-results " + encoded,
+		clientid: client,
+		message:  "question-results " + encoded,
 	})
 
 	return game, true
@@ -270,7 +270,7 @@ func (g *Games) sendGamePlayersToAnswerQuestionScreen(sessionid string, game com
 }
 
 func (g *Games) processShowResultsMessage(msg ShowResultsMessage) {
-	game, ok := g.sendQuestionResultsToHost(msg.client, msg.sessionid, msg.pin)
+	game, ok := g.sendQuestionResultsToHost(msg.clientid, msg.sessionid, msg.pin)
 	if !ok {
 		return
 	}
@@ -348,7 +348,7 @@ func (g *Games) ensureUserIsGameHost(client uint64, sessionid string, pin int) (
 }
 
 func (g *Games) processStartGameMessage(msg StartGameMessage) {
-	game, ok := g.ensureUserIsGameHost(msg.client, msg.sessionid, msg.pin)
+	game, ok := g.ensureUserIsGameHost(msg.clientid, msg.sessionid, msg.pin)
 	if !ok {
 		log.Printf("not starting game because %s is not a game host", msg.sessionid)
 		return
@@ -415,7 +415,7 @@ func (g *Games) processHostGameLobbyMessage(msg HostGameLobbyMessage) {
 	})
 
 	g.msghub.Send(messaging.QuizzesTopic, LookupQuizForGameMessage{
-		client:    msg.client,
+		clientid:  msg.clientid,
 		sessionid: msg.sessionid,
 		quizid:    msg.quizid,
 		pin:       pin,
@@ -423,7 +423,7 @@ func (g *Games) processHostGameLobbyMessage(msg HostGameLobbyMessage) {
 }
 
 func (g *Games) processCancelGameMessage(msg CancelGameMessage) {
-	game, ok := g.ensureUserIsGameHost(msg.client, msg.sessionid, msg.pin)
+	game, ok := g.ensureUserIsGameHost(msg.clientid, msg.sessionid, msg.pin)
 	if !ok {
 		log.Printf("not cancelling game because %s is not a game host", msg.sessionid)
 		return
@@ -579,8 +579,8 @@ func (g *Games) processQueryPlayerResultsMessage(msg QueryPlayerResultsMessage) 
 	}
 
 	g.msghub.Send(messaging.ClientHubTopic, ClientMessage{
-		client:  msg.client,
-		message: "player-results " + encoded,
+		clientid: msg.clientid,
+		message:  "player-results " + encoded,
 	})
 }
 
@@ -612,8 +612,8 @@ func (g *Games) processQueryDisplayChoicesMessage(msg QueryDisplayChoicesMessage
 	}
 
 	g.msghub.Send(messaging.ClientHubTopic, ClientMessage{
-		client:  msg.client,
-		message: fmt.Sprintf("display-choices %d", len(currentQuestion.Answers)),
+		clientid: msg.clientid,
+		message:  fmt.Sprintf("display-choices %d", len(currentQuestion.Answers)),
 	})
 }
 
@@ -641,8 +641,8 @@ func (g *Games) processHostShowGameResultsMessage(msg HostShowGameResultsMessage
 	log.Printf("winners for game %d: %s", msg.pin, encoded)
 
 	g.msghub.Send(messaging.ClientHubTopic, ClientMessage{
-		client:  msg.client,
-		message: "show-winners " + encoded,
+		clientid: msg.clientid,
+		message:  "show-winners " + encoded,
 	})
 }
 
@@ -680,8 +680,8 @@ func (g *Games) processHostShowQuestionMessage(msg HostShowQuestionMessage) {
 	}
 
 	g.msghub.Send(messaging.ClientHubTopic, ClientMessage{
-		client:  msg.client,
-		message: "host-show-question " + encoded,
+		clientid: msg.clientid,
+		message:  "host-show-question " + encoded,
 	})
 }
 
@@ -720,8 +720,8 @@ func (g *Games) processSendGameMetadataMessage(msg SendGameMetadataMessage) {
 	}
 
 	g.msghub.Send(messaging.ClientHubTopic, ClientMessage{
-		client:  msg.client,
-		message: "lobby-game-metadata " + encoded,
+		clientid: msg.clientid,
+		message:  "lobby-game-metadata " + encoded,
 	})
 }
 

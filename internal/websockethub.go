@@ -143,7 +143,7 @@ func (h *Hub) deregisterClient(client *Client) {
 }
 
 func (h *Hub) processClientMessage(msg ClientMessage) {
-	c, ok := h.clientids[msg.client]
+	c, ok := h.clientids[msg.clientid]
 	if !ok {
 		return
 	}
@@ -152,7 +152,7 @@ func (h *Hub) processClientMessage(msg ClientMessage) {
 }
 
 func (h *Hub) processClientErrorMessage(msg ClientErrorMessage) {
-	c, ok := h.clientids[msg.client]
+	c, ok := h.clientids[msg.clientid]
 	if !ok {
 		return
 	}

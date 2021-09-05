@@ -7,15 +7,15 @@ import "github.com/kwkoo/go-quiz/internal/common"
 // --------------------
 
 type ClientErrorMessage struct {
-	client     uint64
+	clientid   uint64
 	sessionid  string
 	message    string
 	nextscreen string
 }
 
 type ClientMessage struct {
-	client  uint64
-	message string
+	clientid uint64
+	message  string
 }
 
 // --------------------
@@ -81,50 +81,50 @@ type AddPlayerToGameMessage struct {
 }
 
 type SendGameMetadataMessage struct {
-	client    uint64
+	clientid  uint64
 	sessionid string
 	pin       int
 }
 
 type HostShowQuestionMessage struct {
-	client    uint64
+	clientid  uint64
 	sessionid string
 	pin       int
 }
 
 type HostShowGameResultsMessage struct {
-	client    uint64
+	clientid  uint64
 	sessionid string
 	pin       int
 }
 
 type QueryDisplayChoicesMessage struct {
-	client    uint64
+	clientid  uint64
 	sessionid string
 	pin       int
 }
 
 type QueryPlayerResultsMessage struct {
-	client    uint64
+	clientid  uint64
 	sessionid string
 	pin       int
 }
 
 type RegisterAnswerMessage struct {
-	client    uint64
+	clientid  uint64
 	sessionid string
 	pin       int
 	answer    int
 }
 
 type CancelGameMessage struct {
-	client    uint64
+	clientid  uint64
 	sessionid string
 	pin       int
 }
 
 type HostGameLobbyMessage struct {
-	client    uint64
+	clientid  uint64
 	sessionid string
 	quizid    int
 }
@@ -135,32 +135,32 @@ type SetQuizForGameMessage struct {
 }
 
 type StartGameMessage struct {
-	client    uint64
+	clientid  uint64
 	sessionid string
 	pin       int
 }
 
 type ShowResultsMessage struct {
-	client    uint64
+	clientid  uint64
 	sessionid string
 	pin       int
 }
 
 type QueryHostResultsMessage struct {
-	client    uint64
+	clientid  uint64
 	sessionid string
 	pin       int
 }
 
 type NextQuestionMessage struct {
-	client    uint64
+	clientid  uint64
 	sessionid string
 	pin       int
 }
 
 // used by frontend
 type DeleteGameMessage struct {
-	client    uint64
+	clientid  uint64
 	sessionid string
 	pin       int
 }
@@ -179,12 +179,12 @@ type DeleteGameByPin struct {
 // --------------------
 
 type SendQuizzesToClientMessage struct {
-	client    uint64
+	clientid  uint64
 	sessionid string
 }
 
 type LookupQuizForGameMessage struct {
-	client    uint64
+	clientid  uint64
 	sessionid string
 	quizid    int
 	pin       int

@@ -133,8 +133,8 @@ func (q *Quizzes) processSendQuizzesToClientMessage(msg SendQuizzesToClientMessa
 		return
 	}
 	q.msghub.Send(messaging.ClientHubTopic, ClientMessage{
-		client:  msg.client,
-		message: "all-quizzes " + encoded,
+		clientid: msg.clientid,
+		message:  "all-quizzes " + encoded,
 	})
 }
 

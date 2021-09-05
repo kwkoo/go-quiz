@@ -8,13 +8,13 @@ import (
 )
 
 type Session struct {
-	Id      string    `json:"id"`
-	Client  uint64    `json:"client"` // ugly hack to avoid having to import the internal package
-	Screen  string    `json:"screen"`
-	Gamepin int       `json:"gamepin"`
-	Name    string    `json:"name"`
-	Admin   bool      `json:"admin"`
-	Expiry  time.Time `json:"expiry"`
+	Id       string    `json:"id"`
+	ClientId uint64    `json:"clientid"`
+	Screen   string    `json:"screen"`
+	Gamepin  int       `json:"gamepin"`
+	Name     string    `json:"name"`
+	Admin    bool      `json:"admin"`
+	Expiry   time.Time `json:"expiry"`
 }
 
 func UnmarshalSession(b []byte) (*Session, error) {
@@ -37,12 +37,12 @@ func (s Session) Marshal() ([]byte, error) {
 
 func (s *Session) Copy() Session {
 	return Session{
-		Id:      s.Id,
-		Client:  s.Client,
-		Screen:  s.Screen,
-		Gamepin: s.Gamepin,
-		Name:    s.Name,
-		Admin:   s.Admin,
-		Expiry:  s.Expiry,
+		Id:       s.Id,
+		ClientId: s.ClientId,
+		Screen:   s.Screen,
+		Gamepin:  s.Gamepin,
+		Name:     s.Name,
+		Admin:    s.Admin,
+		Expiry:   s.Expiry,
 	}
 }
