@@ -202,7 +202,7 @@ func (g *Games) processQueryHostResultsMessage(msg QueryHostResultsMessage) {
 }
 
 // returns ok if successful
-func (g *Games) sendQuestionResultsToHost(client *Client, sessionid string, pin int) (common.Game, bool) {
+func (g *Games) sendQuestionResultsToHost(client uint64, sessionid string, pin int) (common.Game, bool) {
 	game, ok := g.ensureUserIsGameHost(client, sessionid, pin)
 	if !ok {
 		log.Printf("not sending question results to host because %s is not a game host", sessionid)
@@ -309,7 +309,7 @@ func (g *Games) processShowResultsMessage(msg ShowResultsMessage) {
 }
 
 // returns true if successful (treat it as an ok flag)
-func (g *Games) ensureUserIsGameHost(client *Client, sessionid string, pin int) (common.Game, bool) {
+func (g *Games) ensureUserIsGameHost(client uint64, sessionid string, pin int) (common.Game, bool) {
 	game, err := g.Get(pin)
 	if err != nil {
 		g.msghub.Send(messaging.SessionsTopic, SetSessionGamePinMessage{

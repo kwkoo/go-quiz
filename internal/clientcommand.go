@@ -3,12 +3,12 @@ package internal
 import "strings"
 
 type ClientCommand struct {
-	client *Client
+	client uint64
 	cmd    string
 	arg    string
 }
 
-func NewClientCommand(client *Client, message []byte) *ClientCommand {
+func NewClientCommand(client uint64, message []byte) *ClientCommand {
 	cmd, arg := parseCommand(message)
 	return &ClientCommand{
 		client: client,

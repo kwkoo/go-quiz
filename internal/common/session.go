@@ -8,13 +8,13 @@ import (
 )
 
 type Session struct {
-	Id      string      `json:"id"`
-	Client  interface{} `json:"client"` // ugly hack to avoid having to import the internal package
-	Screen  string      `json:"screen"`
-	Gamepin int         `json:"gamepin"`
-	Name    string      `json:"name"`
-	Admin   bool        `json:"admin"`
-	Expiry  time.Time   `json:"expiry"`
+	Id      string    `json:"id"`
+	Client  uint64    `json:"client"` // ugly hack to avoid having to import the internal package
+	Screen  string    `json:"screen"`
+	Gamepin int       `json:"gamepin"`
+	Name    string    `json:"name"`
+	Admin   bool      `json:"admin"`
+	Expiry  time.Time `json:"expiry"`
 }
 
 func UnmarshalSession(b []byte) (*Session, error) {

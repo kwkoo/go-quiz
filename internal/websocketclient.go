@@ -40,15 +40,13 @@ var upgrader = websocket.Upgrader{
 
 // Client is a middleman between the websocket connection and the hub.
 type Client struct {
-	hub *Hub
+	clientid uint64
 
 	// The websocket connection.
 	conn *websocket.Conn
 
 	// Buffered channel of outbound messages.
 	send chan []byte
-
-	sessionid string
 }
 
 // readPump pumps messages from the websocket connection to the hub.
@@ -56,9 +54,9 @@ type Client struct {
 // The application runs readPump in a per-connection goroutine. The application
 // ensures that there is at most one reader on a connection by executing all
 // reads from this goroutine.
-func (c *Client) readPump() {
+func (c *Client) readPump(unregister chan *Client, incomingcommands chan *ClientCommand) {
 	defer func() {
-		c.hub.unregister <- c
+		unregister <- c
 		c.conn.Close()
 	}()
 	c.conn.SetReadLimit(maxMessageSize)
@@ -74,7 +72,7 @@ func (c *Client) readPump() {
 		}
 		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
 
-		c.hub.incomingcommands <- NewClientCommand(c, message)
+		incomingcommands <- NewClientCommand(c.clientid, message)
 	}
 }
 
@@ -131,11 +129,11 @@ func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 		return
 	}
-	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256)}
-	client.hub.register <- client
+	client := &Client{conn: conn, send: make(chan []byte, 256)}
+	hub.register <- client
 
 	// Allow collection of memory referenced by the caller by doing all work in
 	// new goroutines.
 	go client.writePump()
-	go client.readPump()
+	go client.readPump(hub.unregister, hub.incomingcommands)
 }

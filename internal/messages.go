@@ -7,26 +7,27 @@ import "github.com/kwkoo/go-quiz/internal/common"
 // --------------------
 
 type ClientErrorMessage struct {
-	client     *Client
+	client     uint64
 	sessionid  string
 	message    string
 	nextscreen string
 }
 
 type ClientMessage struct {
-	client  *Client
+	client  uint64
 	message string
-}
-
-// this is used in both the client-hub and sessions-hub
-type SetSessionIDForClientMessage struct {
-	client    *Client
-	sessionid string
 }
 
 // --------------------
 // Session Hub Messages
 // --------------------
+
+/*
+type SetSessionIDForClientMessage struct {
+	client    uint64
+	sessionid string
+}
+*/
 
 type SessionToScreenMessage struct {
 	sessionid  string
@@ -72,6 +73,10 @@ type DeleteSessionMessage struct {
 	sessionid string
 }
 
+type DeregisterClientMessage struct {
+	clientid uint64
+}
+
 // --------------------
 // Games Hub Messages
 // --------------------
@@ -83,50 +88,50 @@ type AddPlayerToGameMessage struct {
 }
 
 type SendGameMetadataMessage struct {
-	client    *Client
+	client    uint64
 	sessionid string
 	pin       int
 }
 
 type HostShowQuestionMessage struct {
-	client    *Client
+	client    uint64
 	sessionid string
 	pin       int
 }
 
 type HostShowGameResultsMessage struct {
-	client    *Client
+	client    uint64
 	sessionid string
 	pin       int
 }
 
 type QueryDisplayChoicesMessage struct {
-	client    *Client
+	client    uint64
 	sessionid string
 	pin       int
 }
 
 type QueryPlayerResultsMessage struct {
-	client    *Client
+	client    uint64
 	sessionid string
 	pin       int
 }
 
 type RegisterAnswerMessage struct {
-	client    *Client
+	client    uint64
 	sessionid string
 	pin       int
 	answer    int
 }
 
 type CancelGameMessage struct {
-	client    *Client
+	client    uint64
 	sessionid string
 	pin       int
 }
 
 type HostGameLobbyMessage struct {
-	client    *Client
+	client    uint64
 	sessionid string
 	quizid    int
 }
@@ -137,32 +142,32 @@ type SetQuizForGameMessage struct {
 }
 
 type StartGameMessage struct {
-	client    *Client
+	client    uint64
 	sessionid string
 	pin       int
 }
 
 type ShowResultsMessage struct {
-	client    *Client
+	client    uint64
 	sessionid string
 	pin       int
 }
 
 type QueryHostResultsMessage struct {
-	client    *Client
+	client    uint64
 	sessionid string
 	pin       int
 }
 
 type NextQuestionMessage struct {
-	client    *Client
+	client    uint64
 	sessionid string
 	pin       int
 }
 
 // used by frontend
 type DeleteGameMessage struct {
-	client    *Client
+	client    uint64
 	sessionid string
 	pin       int
 }
@@ -181,12 +186,12 @@ type DeleteGameByPin struct {
 // --------------------
 
 type SendQuizzesToClientMessage struct {
-	client    *Client
+	client    uint64
 	sessionid string
 }
 
 type LookupQuizForGameMessage struct {
-	client    *Client
+	client    uint64
 	sessionid string
 	quizid    int
 	pin       int

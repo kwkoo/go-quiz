@@ -21,6 +21,7 @@ type Sessions struct {
 	msghub         *messaging.MessageHub
 	mutex          sync.RWMutex
 	all            map[string]*common.Session
+	clientids      map[uint64]*common.Session
 	engine         *PersistenceEngine
 	auth           *api.Auth
 	sessionTimeout int
@@ -32,6 +33,7 @@ func InitSessions(msghub *messaging.MessageHub, engine *PersistenceEngine, auth 
 	sessions := Sessions{
 		msghub:         msghub,
 		all:            make(map[string]*common.Session),
+		clientids:      make(map[uint64]*common.Session),
 		engine:         engine,
 		auth:           auth,
 		sessionTimeout: sessionTimeout,
@@ -46,7 +48,7 @@ func InitSessions(msghub *messaging.MessageHub, engine *PersistenceEngine, auth 
 	log.Printf("persistent store contains %d sessions - clearing clients from all sessions...", len(keys))
 	for _, key := range keys {
 		key = key[len("session:"):]
-		sessions.updateClientForSession(key, nil)
+		sessions.updateClientForSession(key, 0)
 	}
 
 	// session reaper
@@ -110,12 +112,16 @@ func (s *Sessions) Run() {
 				s.processSetSessionGamePinMessage(m)
 			case DeregisterGameFromSessionsMessage:
 				s.processDeregisterGameFromSessionsMessage(m)
-			case SetSessionIDForClientMessage:
-				s.processSetSessionIDForClientMessage(m)
+			/*
+				case SetSessionIDForClientMessage:
+					s.processSetSessionIDForClientMessage(m)
+			*/
 			case ExtendSessionExpiryMessage:
 				s.processExtendSessionExpiryMessage(m)
 			case DeleteSessionMessage:
 				s.processDeleteSessionMessage(m)
+			case DeregisterClientMessage:
+				s.processDeregisterClientMessage(m)
 			default:
 				log.Printf("unrecognized message type %T received on %s topic", msg, messaging.SessionsTopic)
 			}
@@ -127,13 +133,26 @@ func (s *Sessions) Run() {
 	}
 }
 
+func (s *Sessions) processDeregisterClientMessage(msg DeregisterClientMessage) {
+	log.Printf("session deregister client %d", msg.clientid)
+	session, ok := s.clientids[msg.clientid]
+	if ok {
+		//session.Client = 0
+		s.updateClientForSession(session.Id, 0)
+	}
+
+	delete(s.clientids, msg.clientid)
+}
+
 func (s *Sessions) processDeleteSessionMessage(msg DeleteSessionMessage) {
 	s.deleteSession(msg.sessionid)
 }
 
+/*
 func (s *Sessions) processSetSessionIDForClientMessage(msg SetSessionIDForClientMessage) {
 	s.updateClientForSession(msg.sessionid, msg.client)
 }
+*/
 
 func (s *Sessions) processDeregisterGameFromSessionsMessage(msg DeregisterGameFromSessionsMessage) {
 	for _, sessionid := range msg.sessions {
@@ -153,7 +172,7 @@ func (s *Sessions) processSessionMessage(msg SessionMessage) {
 		return
 	}
 	s.msghub.Send(messaging.ClientHubTopic, ClientMessage{
-		client:  sess.Client.(*Client),
+		client:  sess.Client,
 		message: msg.message,
 	})
 }
@@ -181,27 +200,27 @@ func (s *Sessions) processSessionToScreenMessage(msg SessionToScreenMessage) {
 
 	case "host-select-quiz":
 		s.msghub.Send(messaging.QuizzesTopic, SendQuizzesToClientMessage{
-			client:    session.Client.(*Client),
+			client:    session.Client,
 			sessionid: session.Id,
 		})
 
 	case "host-game-lobby":
 		s.msghub.Send(messaging.GamesTopic, SendGameMetadataMessage{
-			client:    session.Client.(*Client),
+			client:    session.Client,
 			sessionid: session.Id,
 			pin:       session.Gamepin,
 		})
 
 	case "host-show-question":
 		s.msghub.Send(messaging.GamesTopic, HostShowQuestionMessage{
-			client:    session.Client.(*Client),
+			client:    session.Client,
 			sessionid: session.Id,
 			pin:       session.Gamepin,
 		})
 
 	case "host-show-game-results":
 		s.msghub.Send(messaging.GamesTopic, HostShowGameResultsMessage{
-			client:    session.Client.(*Client),
+			client:    session.Client,
 			sessionid: session.Id,
 			pin:       session.Gamepin,
 		})
@@ -212,7 +231,7 @@ func (s *Sessions) processSessionToScreenMessage(msg SessionToScreenMessage) {
 	s.setSessionScreen(session.Id, msg.nextscreen)
 
 	s.msghub.Send(messaging.ClientHubTopic, ClientMessage{
-		client:  session.Client.(*Client),
+		client:  session.Client,
 		message: "screen " + msg.nextscreen,
 	})
 }
@@ -227,7 +246,7 @@ func (s *Sessions) processErrorToSessionMessage(msg ErrorToSessionMessage) {
 	}
 
 	client := s.getClientForSession(msg.sessionid)
-	if client == nil {
+	if client == 0 {
 		// session is not bound to a client
 		log.Printf("session %s does not have a client", msg.sessionid)
 		return
@@ -246,7 +265,8 @@ func (s *Sessions) processExtendSessionExpiryMessage(msg ExtendSessionExpiryMess
 }
 
 func (s *Sessions) processClientCommand(m *ClientCommand) {
-	if m.client.sessionid == "" {
+	session, ok := s.clientids[m.client]
+	if !ok {
 		// client hasn't identified themselves yet
 		if m.cmd == "session" {
 			if len(m.arg) == 0 || len(m.arg) > 64 {
@@ -259,18 +279,14 @@ func (s *Sessions) processClientCommand(m *ClientCommand) {
 				return
 			}
 
-			client := m.client
+			clientid := m.client
 			sessionid := m.arg
-			s.msghub.Send(messaging.ClientHubTopic, SetSessionIDForClientMessage{
-				client:    client,
-				sessionid: sessionid,
-			})
 
 			session := s.GetSession(sessionid)
 			if session == nil {
 				session = s.newSession(sessionid, m.client, "entrance")
 			} else {
-				if session.Client != nil && session.Client.(*Client) != nil {
+				if session.Client != 0 {
 					s.msghub.Send(messaging.ClientHubTopic, ClientErrorMessage{
 						client:     m.client,
 						sessionid:  "",
@@ -278,14 +294,9 @@ func (s *Sessions) processClientCommand(m *ClientCommand) {
 						nextscreen: "",
 					})
 
-					s.msghub.Send(messaging.ClientHubTopic, SetSessionIDForClientMessage{
-						client:    client,
-						sessionid: "",
-					})
-
 					return
 				}
-				s.updateClientForSession(session.Id, client)
+				s.updateClientForSession(session.Id, clientid)
 			}
 			s.msghub.Send(messaging.SessionsTopic, SessionToScreenMessage{
 				sessionid:  sessionid,
@@ -300,15 +311,20 @@ func (s *Sessions) processClientCommand(m *ClientCommand) {
 		return
 	}
 
+	sessionid := ""
+	if session != nil {
+		sessionid = session.Id
+	}
+
 	client := m.client
-	sessionid := client.sessionid
-	session := s.GetSession(sessionid)
 
 	if session == nil {
-		s.msghub.Send(messaging.ClientHubTopic, SetSessionIDForClientMessage{
-			client:    client,
-			sessionid: "",
-		})
+		/*
+			s.msghub.Send(messaging.ClientHubTopic, SetSessionIDForClientMessage{
+				client:    client,
+				sessionid: "",
+			})
+		*/
 		s.msghub.Send(messaging.ClientHubTopic, ClientErrorMessage{
 			client:     m.client,
 			sessionid:  "",
@@ -526,16 +542,17 @@ func (s *Sessions) processClientCommand(m *ClientCommand) {
 	}
 }
 
-func (s *Sessions) newSession(id string, client *Client, screen string) *common.Session {
+func (s *Sessions) newSession(id string, clientid uint64, screen string) *common.Session {
 	session := &common.Session{
 		Id:     id,
-		Client: client,
+		Client: clientid,
 		Screen: screen,
 		Expiry: time.Now().Add(time.Duration(s.sessionTimeout) * time.Second),
 	}
 
 	s.mutex.Lock()
 	s.all[id] = session
+	s.clientids[clientid] = session
 	s.mutex.Unlock()
 
 	s.persist(session)
@@ -604,17 +621,17 @@ func (s *Sessions) deleteSession(id string) {
 	s.engine.Delete(fmt.Sprintf("session:%s", id))
 }
 
-func (s *Sessions) getClientForSession(id string) *Client {
+func (s *Sessions) getClientForSession(id string) uint64 {
 	session := s.GetSession(id)
 
 	if session == nil {
-		return nil
+		return 0
 	}
 
-	return session.Client.(*Client)
+	return session.Client
 }
 
-func (s *Sessions) updateClientForSession(id string, newclient *Client) {
+func (s *Sessions) updateClientForSession(id string, newclientid uint64) {
 	if id == "" {
 		return
 	}
@@ -625,7 +642,16 @@ func (s *Sessions) updateClientForSession(id string, newclient *Client) {
 	}
 
 	s.mutex.Lock()
-	session.Client = newclient
+	oldclientid := session.Client
+	if oldclientid != 0 {
+		delete(s.clientids, oldclientid)
+	}
+	session.Client = newclientid
+	if newclientid == 0 {
+		delete(s.clientids, newclientid)
+	} else {
+		s.clientids[newclientid] = session
+	}
 	s.mutex.Unlock()
 	s.persist(session)
 }
@@ -660,6 +686,9 @@ func (s *Sessions) GetSession(id string) *common.Session {
 
 	s.mutex.Lock()
 	s.all[id] = decoded
+	if decoded.Client != 0 {
+		s.clientids[decoded.Client] = decoded
+	}
 	s.mutex.Unlock()
 	return decoded
 }

@@ -7,6 +7,8 @@ package internal
 
 import (
 	"log"
+	"math"
+	"sync"
 
 	"github.com/kwkoo/go-quiz/internal/api"
 	"github.com/kwkoo/go-quiz/internal/common"
@@ -17,8 +19,13 @@ import (
 // Hub maintains the set of active clients and broadcasts messages to the
 // clients.
 type Hub struct {
+	// For generation of client IDs
+	nextclientid uint64
+	clientmux    sync.Mutex
+
 	// Registered clients.
-	clients map[*Client]bool
+	clients   map[*Client]bool
+	clientids map[uint64]*Client
 
 	// Inbound messages from the clients.
 	incomingcommands chan *ClientCommand
@@ -67,6 +74,7 @@ func NewHub(msghub *messaging.MessageHub, redisHost, redisPassword string, auth 
 		register:          make(chan *Client),
 		unregister:        make(chan *Client),
 		clients:           make(map[*Client]bool),
+		clientids:         make(map[uint64]*Client),
 		msghub:            msghub,
 		sessions:          sessions,
 		quizzes:           quizzes,
@@ -91,7 +99,10 @@ func (h *Hub) Run() {
 			return
 
 		case client := <-h.register:
+			clientid := h.generateClientID()
+			client.clientid = clientid
 			h.clients[client] = true
+			h.clientids[clientid] = client
 
 		case client := <-h.unregister:
 			h.deregisterClient(client)
@@ -110,8 +121,6 @@ func (h *Hub) Run() {
 				h.processClientMessage(m)
 			case ClientErrorMessage:
 				h.processClientErrorMessage(m)
-			case SetSessionIDForClientMessage:
-				h.processSetSessionIDForClientMessage(m)
 			default:
 				log.Printf("unrecognized message type %T received on %s topic", msg, messaging.ClientHubTopic)
 			}
@@ -123,28 +132,43 @@ func (h *Hub) deregisterClient(client *Client) {
 	if client == nil {
 		return
 	}
+
 	delete(h.clients, client)
+	delete(h.clientids, client.clientid)
 	close(client.send)
-	if client.sessionid != "" {
-		log.Printf("cleaned up client for session %s", client.sessionid)
 
-		h.msghub.Send(messaging.SessionsTopic, SetSessionIDForClientMessage{
-			sessionid: client.sessionid,
-			client:    nil,
-		})
-	}
-}
+	h.msghub.Send(messaging.SessionsTopic, DeregisterClientMessage{
+		clientid: client.clientid,
+	})
 
-func (h *Hub) processSetSessionIDForClientMessage(msg SetSessionIDForClientMessage) {
-	msg.client.sessionid = msg.sessionid
+	/*
+		if client.sessionid != "" {
+			log.Printf("cleaned up client for session %s", client.sessionid)
+
+			h.msghub.Send(messaging.SessionsTopic, SetSessionIDForClientMessage{
+				sessionid: client.sessionid,
+				client:    0,
+			})
+		}
+	*/
 }
 
 func (h *Hub) processClientMessage(msg ClientMessage) {
-	h.sendMessageToClient(msg.client, msg.message)
+	c, ok := h.clientids[msg.client]
+	if !ok {
+		return
+	}
+
+	h.sendMessageToClient(c, msg.message)
 }
 
 func (h *Hub) processClientErrorMessage(msg ClientErrorMessage) {
-	h.errorMessageToClient(msg.client, msg.message, msg.nextscreen)
+	c, ok := h.clientids[msg.client]
+	if !ok {
+		return
+	}
+
+	h.errorMessageToClient(c, msg.message, msg.nextscreen)
 }
 
 func (h *Hub) processMessage(m *ClientCommand) {
@@ -199,6 +223,17 @@ func (h *Hub) errorMessageToClient(c *Client, message, nextscreen string) {
 		return
 	}
 	h.sendMessageToClient(c, "error "+encoded)
+}
+
+func (h *Hub) generateClientID() uint64 {
+	h.clientmux.Lock()
+	defer h.clientmux.Unlock()
+
+	if h.nextclientid == math.MaxUint64 {
+		h.nextclientid = 0
+	}
+	h.nextclientid++
+	return h.nextclientid
 }
 
 // used by the REST API
