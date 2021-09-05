@@ -140,17 +140,6 @@ func (h *Hub) deregisterClient(client *Client) {
 	h.msghub.Send(messaging.SessionsTopic, DeregisterClientMessage{
 		clientid: client.clientid,
 	})
-
-	/*
-		if client.sessionid != "" {
-			log.Printf("cleaned up client for session %s", client.sessionid)
-
-			h.msghub.Send(messaging.SessionsTopic, SetSessionIDForClientMessage{
-				sessionid: client.sessionid,
-				client:    0,
-			})
-		}
-	*/
 }
 
 func (h *Hub) processClientMessage(msg ClientMessage) {

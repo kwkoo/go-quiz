@@ -112,10 +112,6 @@ func (s *Sessions) Run() {
 				s.processSetSessionGamePinMessage(m)
 			case DeregisterGameFromSessionsMessage:
 				s.processDeregisterGameFromSessionsMessage(m)
-			/*
-				case SetSessionIDForClientMessage:
-					s.processSetSessionIDForClientMessage(m)
-			*/
 			case ExtendSessionExpiryMessage:
 				s.processExtendSessionExpiryMessage(m)
 			case DeleteSessionMessage:
@@ -137,7 +133,6 @@ func (s *Sessions) processDeregisterClientMessage(msg DeregisterClientMessage) {
 	log.Printf("session deregister client %d", msg.clientid)
 	session, ok := s.clientids[msg.clientid]
 	if ok {
-		//session.Client = 0
 		s.updateClientForSession(session.Id, 0)
 	}
 
@@ -147,12 +142,6 @@ func (s *Sessions) processDeregisterClientMessage(msg DeregisterClientMessage) {
 func (s *Sessions) processDeleteSessionMessage(msg DeleteSessionMessage) {
 	s.deleteSession(msg.sessionid)
 }
-
-/*
-func (s *Sessions) processSetSessionIDForClientMessage(msg SetSessionIDForClientMessage) {
-	s.updateClientForSession(msg.sessionid, msg.client)
-}
-*/
 
 func (s *Sessions) processDeregisterGameFromSessionsMessage(msg DeregisterGameFromSessionsMessage) {
 	for _, sessionid := range msg.sessions {

@@ -22,13 +22,6 @@ type ClientMessage struct {
 // Session Hub Messages
 // --------------------
 
-/*
-type SetSessionIDForClientMessage struct {
-	client    uint64
-	sessionid string
-}
-*/
-
 type SessionToScreenMessage struct {
 	sessionid  string
 	nextscreen string
