@@ -69,10 +69,32 @@ func main() {
 
 	mh := messaging.InitMessageHub()
 
-	hub := internal.NewHub(mh, config.RedisHost, config.RedisPassword, auth, config.SessionTimeout)
-	go hub.Run()
+	persistenceEngine := internal.InitRedis(config.RedisHost, config.RedisPassword)
+	quizzes, err := internal.InitQuizzes(mh, persistenceEngine)
+	if err != nil {
+		log.Fatal(err)
+	}
+	sessions := internal.InitSessions(mh, persistenceEngine, auth, config.SessionTimeout)
+	games := internal.InitGames(mh, persistenceEngine)
 
-	api := api.InitRestApi(hub)
+	go func(shutdownChan chan struct{}) {
+		quizzes.Run(shutdownChan)
+	}(shutdown.GetShutdownChan())
+
+	go func(shutdownChan chan struct{}) {
+		sessions.Run(shutdownChan)
+	}(shutdown.GetShutdownChan())
+
+	go func(shutdownChan chan struct{}) {
+		games.Run(shutdownChan)
+	}(shutdown.GetShutdownChan())
+
+	hub := internal.NewHub(mh, persistenceEngine)
+	go func(shutdownChan chan struct{}) {
+		hub.Run(shutdownChan)
+	}(shutdown.GetShutdownChan())
+
+	api := api.InitRestApi(mh)
 	http.HandleFunc("/api/", auth.BasicAuth(api.ServeHTTP))
 
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {

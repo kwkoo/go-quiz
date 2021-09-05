@@ -74,8 +74,7 @@ func InitSessions(msghub *messaging.MessageHub, engine *PersistenceEngine, auth 
 	return &sessions
 }
 
-func (s *Sessions) Run() {
-	shutdownChan := shutdown.GetShutdownChan()
+func (s *Sessions) Run(shutdownChan chan struct{}) {
 	fromClients := s.msghub.GetTopic(messaging.IncomingMessageTopic)
 	sessionsHub := s.msghub.GetTopic(messaging.SessionsTopic)
 
@@ -98,26 +97,28 @@ func (s *Sessions) Run() {
 				continue
 			}
 			switch m := msg.(type) {
-			case ErrorToSessionMessage:
+			case common.ErrorToSessionMessage:
 				s.processErrorToSessionMessage(m)
-			case BindGameToSessionMessage:
+			case common.BindGameToSessionMessage:
 				s.processBindGameToSessionMessage(m)
-			case SessionToScreenMessage:
+			case common.SessionToScreenMessage:
 				s.processSessionToScreenMessage(m)
-			case SetSessionScreenMessage:
+			case common.SetSessionScreenMessage:
 				s.processSetSessionScreenMessage(m)
-			case SessionMessage:
+			case common.SessionMessage:
 				s.processSessionMessage(m)
-			case SetSessionGamePinMessage:
+			case common.SetSessionGamePinMessage:
 				s.processSetSessionGamePinMessage(m)
-			case DeregisterGameFromSessionsMessage:
+			case common.DeregisterGameFromSessionsMessage:
 				s.processDeregisterGameFromSessionsMessage(m)
-			case ExtendSessionExpiryMessage:
+			case common.ExtendSessionExpiryMessage:
 				s.processExtendSessionExpiryMessage(m)
-			case DeleteSessionMessage:
+			case common.DeleteSessionMessage:
 				s.processDeleteSessionMessage(m)
-			case DeregisterClientMessage:
+			case common.DeregisterClientMessage:
 				s.processDeregisterClientMessage(m)
+			case *common.GetSessionsMessage:
+				s.processGetSessionsMessage(m)
 			default:
 				log.Printf("unrecognized message type %T received on %s topic", msg, messaging.SessionsTopic)
 			}
@@ -129,133 +130,138 @@ func (s *Sessions) Run() {
 	}
 }
 
-func (s *Sessions) processDeregisterClientMessage(msg DeregisterClientMessage) {
-	log.Printf("session deregister client %d", msg.clientid)
-	session, ok := s.clientids[msg.clientid]
+func (s *Sessions) processGetSessionsMessage(msg *common.GetSessionsMessage) {
+	msg.Result <- s.GetAll()
+	close(msg.Result)
+}
+
+func (s *Sessions) processDeregisterClientMessage(msg common.DeregisterClientMessage) {
+	log.Printf("session deregister client %d", msg.Clientid)
+	session, ok := s.clientids[msg.Clientid]
 	if ok {
 		s.updateClientIDForSession(session.Id, 0)
 	}
 
-	delete(s.clientids, msg.clientid)
+	delete(s.clientids, msg.Clientid)
 }
 
-func (s *Sessions) processDeleteSessionMessage(msg DeleteSessionMessage) {
-	session := s.GetSession(msg.sessionid)
+func (s *Sessions) processDeleteSessionMessage(msg common.DeleteSessionMessage) {
+	session := s.GetSession(msg.Sessionid)
 	if session == nil {
 		return
 	}
 	delete(s.clientids, session.ClientId)
-	s.deleteSession(msg.sessionid)
+	s.deleteSession(msg.Sessionid)
 }
 
-func (s *Sessions) processDeregisterGameFromSessionsMessage(msg DeregisterGameFromSessionsMessage) {
-	for _, sessionid := range msg.sessions {
+func (s *Sessions) processDeregisterGameFromSessionsMessage(msg common.DeregisterGameFromSessionsMessage) {
+	for _, sessionid := range msg.Sessions {
 		s.deregisterGameFromSession(sessionid)
 	}
 }
 
-func (s *Sessions) processSetSessionGamePinMessage(msg SetSessionGamePinMessage) {
-	s.setSessionGamePin(msg.sessionid, msg.pin)
+func (s *Sessions) processSetSessionGamePinMessage(msg common.SetSessionGamePinMessage) {
+	s.setSessionGamePin(msg.Sessionid, msg.Pin)
 }
 
-func (s *Sessions) processSessionMessage(msg SessionMessage) {
-	sess := s.GetSession(msg.sessionid)
+func (s *Sessions) processSessionMessage(msg common.SessionMessage) {
+	sess := s.GetSession(msg.Sessionid)
 	if sess == nil {
 		// session doesn't exist
-		log.Printf("session %s does not exist", msg.sessionid)
+		log.Printf("session %s does not exist", msg.Sessionid)
 		return
 	}
-	s.msghub.Send(messaging.ClientHubTopic, ClientMessage{
-		clientid: sess.ClientId,
-		message:  msg.message,
+	s.msghub.Send(messaging.ClientHubTopic, common.ClientMessage{
+		Clientid: sess.ClientId,
+		Message:  msg.Message,
 	})
 }
 
-func (s *Sessions) processSetSessionScreenMessage(msg SetSessionScreenMessage) {
-	s.setSessionScreen(msg.sessionid, msg.nextscreen)
+func (s *Sessions) processSetSessionScreenMessage(msg common.SetSessionScreenMessage) {
+	s.setSessionScreen(msg.Sessionid, msg.Nextscreen)
 }
 
-func (s *Sessions) processSessionToScreenMessage(msg SessionToScreenMessage) {
-	session := s.GetSession(msg.sessionid)
+func (s *Sessions) processSessionToScreenMessage(msg common.SessionToScreenMessage) {
+	session := s.GetSession(msg.Sessionid)
 	if session == nil {
 		// session doesn't exist
-		log.Printf("session %s does not exist", msg.sessionid)
+		log.Printf("session %s does not exist", msg.Sessionid)
 		return
 	}
 
 	// session is valid from this point on
 
 	// ensure that session is admin if trying to access host screens
-	if strings.HasPrefix(msg.nextscreen, "host") && !session.Admin {
-		msg.nextscreen = "authenticate-user"
+	if strings.HasPrefix(msg.Nextscreen, "host") && !session.Admin {
+		msg.Nextscreen = "authenticate-user"
 	}
 
-	switch msg.nextscreen {
+	switch msg.Nextscreen {
 
 	case "host-select-quiz":
-		s.msghub.Send(messaging.QuizzesTopic, SendQuizzesToClientMessage{
-			clientid:  session.ClientId,
-			sessionid: session.Id,
+		s.msghub.Send(messaging.QuizzesTopic, common.SendQuizzesToClientMessage{
+			Clientid:  session.ClientId,
+			Sessionid: session.Id,
 		})
 
 	case "host-game-lobby":
-		s.msghub.Send(messaging.GamesTopic, SendGameMetadataMessage{
-			clientid:  session.ClientId,
-			sessionid: session.Id,
-			pin:       session.Gamepin,
+		s.msghub.Send(messaging.GamesTopic, common.SendGameMetadataMessage{
+			Clientid:  session.ClientId,
+			Sessionid: session.Id,
+			Pin:       session.Gamepin,
 		})
 
 	case "host-show-question":
-		s.msghub.Send(messaging.GamesTopic, HostShowQuestionMessage{
-			clientid:  session.ClientId,
-			sessionid: session.Id,
-			pin:       session.Gamepin,
+		s.msghub.Send(messaging.GamesTopic, common.HostShowQuestionMessage{
+			Clientid:  session.ClientId,
+			Sessionid: session.Id,
+			Pin:       session.Gamepin,
 		})
 
 	case "host-show-game-results":
-		s.msghub.Send(messaging.GamesTopic, HostShowGameResultsMessage{
-			clientid:  session.ClientId,
-			sessionid: session.Id,
-			pin:       session.Gamepin,
+		s.msghub.Send(messaging.GamesTopic, common.HostShowGameResultsMessage{
+			Clientid:  session.ClientId,
+			Sessionid: session.Id,
+			Pin:       session.Gamepin,
 		})
 
 		// end of switch
 	}
 
-	s.setSessionScreen(session.Id, msg.nextscreen)
+	s.setSessionScreen(session.Id, msg.Nextscreen)
 
-	s.msghub.Send(messaging.ClientHubTopic, ClientMessage{
-		clientid: session.ClientId,
-		message:  "screen " + msg.nextscreen,
+	s.msghub.Send(messaging.ClientHubTopic, common.ClientMessage{
+		Clientid: session.ClientId,
+		Message:  "screen " + msg.Nextscreen,
 	})
 }
 
-func (s *Sessions) processBindGameToSessionMessage(msg BindGameToSessionMessage) {
-	s.registerSessionInGame(msg.sessionid, msg.name, msg.pin)
+func (s *Sessions) processBindGameToSessionMessage(msg common.BindGameToSessionMessage) {
+	s.registerSessionInGame(msg.Sessionid, msg.Name, msg.Pin)
 }
 
-func (s *Sessions) processErrorToSessionMessage(msg ErrorToSessionMessage) {
-	if msg.nextscreen != "" {
-		s.setSessionScreen(msg.sessionid, msg.nextscreen)
+func (s *Sessions) processErrorToSessionMessage(msg common.ErrorToSessionMessage) {
+	if msg.Nextscreen != "" {
+		s.setSessionScreen(msg.Sessionid, msg.Nextscreen)
 	}
 
-	clientid := s.getClientIDForSession(msg.sessionid)
+	clientid := s.getClientIDForSession(msg.Sessionid)
 	if clientid == 0 {
 		// session is not bound to a client
-		log.Printf("session %s does not have a client", msg.sessionid)
+		log.Printf("session %s does not have a client", msg.Sessionid)
 		return
 	}
 
-	s.msghub.Send(messaging.ClientHubTopic, ClientErrorMessage{
-		clientid:   clientid,
-		sessionid:  msg.sessionid,
-		message:    msg.message,
-		nextscreen: msg.nextscreen,
+	s.msghub.Send(messaging.ClientHubTopic, common.ClientErrorMessage{
+		Clientid:   clientid,
+		Sessionid:  msg.Sessionid,
+		Message:    msg.Message,
+		Nextscreen: msg.Nextscreen,
 	})
 }
 
-func (s *Sessions) processExtendSessionExpiryMessage(msg ExtendSessionExpiryMessage) {
-	s.extendSessionExpiry(msg.sessionid)
+func (s *Sessions) processExtendSessionExpiryMessage(msg common.ExtendSessionExpiryMessage) {
+	s.extendSessionExpiry(msg.Sessionid)
 }
 
 func (s *Sessions) processClientCommand(m *ClientCommand) {
@@ -264,11 +270,11 @@ func (s *Sessions) processClientCommand(m *ClientCommand) {
 		// client hasn't identified themselves yet
 		if m.cmd == "session" {
 			if len(m.arg) == 0 || len(m.arg) > 64 {
-				s.msghub.Send(messaging.ClientHubTopic, ClientErrorMessage{
-					clientid:   m.client,
-					sessionid:  "",
-					message:    "invalid session ID",
-					nextscreen: "entrance",
+				s.msghub.Send(messaging.ClientHubTopic, common.ClientErrorMessage{
+					Clientid:   m.client,
+					Sessionid:  "",
+					Message:    "invalid session ID",
+					Nextscreen: "entrance",
 				})
 				return
 			}
@@ -281,26 +287,26 @@ func (s *Sessions) processClientCommand(m *ClientCommand) {
 				session = s.newSession(sessionid, m.client, "entrance")
 			} else {
 				if session.ClientId != 0 {
-					s.msghub.Send(messaging.ClientHubTopic, ClientErrorMessage{
-						clientid:   m.client,
-						sessionid:  "",
-						message:    "you have another active session - disconnect that session before reconnecting",
-						nextscreen: "",
+					s.msghub.Send(messaging.ClientHubTopic, common.ClientErrorMessage{
+						Clientid:   m.client,
+						Sessionid:  "",
+						Message:    "you have another active session - disconnect that session before reconnecting",
+						Nextscreen: "",
 					})
 
 					return
 				}
 				s.updateClientIDForSession(session.Id, clientid)
 			}
-			s.msghub.Send(messaging.SessionsTopic, SessionToScreenMessage{
-				sessionid:  sessionid,
-				nextscreen: session.Screen,
+			s.msghub.Send(messaging.SessionsTopic, common.SessionToScreenMessage{
+				Sessionid:  sessionid,
+				Nextscreen: session.Screen,
 			})
 			return
 		}
-		s.msghub.Send(messaging.ClientHubTopic, ClientMessage{
-			clientid: m.client,
-			message:  "register-session",
+		s.msghub.Send(messaging.ClientHubTopic, common.ClientMessage{
+			Clientid: m.client,
+			Message:  "register-session",
 		})
 		return
 	}
@@ -313,11 +319,11 @@ func (s *Sessions) processClientCommand(m *ClientCommand) {
 	clientid := m.client
 
 	if session == nil {
-		s.msghub.Send(messaging.ClientHubTopic, ClientErrorMessage{
-			clientid:   m.client,
-			sessionid:  "",
-			message:    "session does not exist",
-			nextscreen: "",
+		s.msghub.Send(messaging.ClientHubTopic, common.ClientErrorMessage{
+			Clientid:   m.client,
+			Sessionid:  "",
+			Message:    "session does not exist",
+			Nextscreen: "",
 		})
 
 		return
@@ -329,18 +335,18 @@ func (s *Sessions) processClientCommand(m *ClientCommand) {
 
 	case "admin-login":
 		if s.authenticateAdmin(sessionid, m.arg) {
-			s.msghub.Send(messaging.SessionsTopic, SessionToScreenMessage{
-				sessionid:  sessionid,
-				nextscreen: "host-select-quiz",
+			s.msghub.Send(messaging.SessionsTopic, common.SessionToScreenMessage{
+				Sessionid:  sessionid,
+				Nextscreen: "host-select-quiz",
 			})
 
 			return
 		}
 
 		// invalid credentials
-		s.msghub.Send(messaging.ClientHubTopic, ClientMessage{
-			clientid: clientid,
-			message:  "invalid-credentials",
+		s.msghub.Send(messaging.ClientHubTopic, common.ClientMessage{
+			Clientid: clientid,
+			Message:  "invalid-credentials",
 		})
 		return
 
@@ -351,26 +357,26 @@ func (s *Sessions) processClientCommand(m *ClientCommand) {
 		}{}
 		dec := json.NewDecoder(strings.NewReader(m.arg))
 		if err := dec.Decode(&pinfo); err != nil {
-			s.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
-				sessionid:  sessionid,
-				message:    "could not decode json: " + err.Error(),
-				nextscreen: "entrance",
+			s.msghub.Send(messaging.SessionsTopic, common.ErrorToSessionMessage{
+				Sessionid:  sessionid,
+				Message:    "could not decode json: " + err.Error(),
+				Nextscreen: "entrance",
 			})
 			return
 		}
 		if len(pinfo.Name) == 0 {
-			s.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
-				sessionid:  sessionid,
-				message:    "name is missing",
-				nextscreen: "entrance",
+			s.msghub.Send(messaging.SessionsTopic, common.ErrorToSessionMessage{
+				Sessionid:  sessionid,
+				Message:    "name is missing",
+				Nextscreen: "entrance",
 			})
 			return
 		}
 
-		s.msghub.Send(messaging.GamesTopic, AddPlayerToGameMessage{
-			sessionid: sessionid,
-			name:      pinfo.Name,
-			pin:       pinfo.Pin,
+		s.msghub.Send(messaging.GamesTopic, common.AddPlayerToGameMessage{
+			Sessionid: sessionid,
+			Name:      pinfo.Name,
+			Pin:       pinfo.Pin,
 		})
 
 		return
@@ -379,17 +385,17 @@ func (s *Sessions) processClientCommand(m *ClientCommand) {
 		// player may have been disconnected - now they need to know how many
 		// answers to enable
 		if session.Gamepin < 0 {
-			s.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
-				sessionid:  sessionid,
-				message:    "could not get game pin for this session",
-				nextscreen: "entrance",
+			s.msghub.Send(messaging.SessionsTopic, common.ErrorToSessionMessage{
+				Sessionid:  sessionid,
+				Message:    "could not get game pin for this session",
+				Nextscreen: "entrance",
 			})
 			return
 		}
-		s.msghub.Send(messaging.GamesTopic, QueryDisplayChoicesMessage{
-			clientid:  clientid,
-			sessionid: sessionid,
-			pin:       session.Gamepin,
+		s.msghub.Send(messaging.GamesTopic, common.QueryDisplayChoicesMessage{
+			Clientid:  clientid,
+			Sessionid: sessionid,
+			Pin:       session.Gamepin,
 		})
 		return
 
@@ -397,134 +403,134 @@ func (s *Sessions) processClientCommand(m *ClientCommand) {
 		// player may have been disconnected - now they need to know about
 		// their results
 		if session.Gamepin < 0 {
-			s.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
-				sessionid:  sessionid,
-				message:    "could not get game pin for this session",
-				nextscreen: "entrance",
+			s.msghub.Send(messaging.SessionsTopic, common.ErrorToSessionMessage{
+				Sessionid:  sessionid,
+				Message:    "could not get game pin for this session",
+				Nextscreen: "entrance",
 			})
 			return
 		}
 
-		s.msghub.Send(messaging.GamesTopic, QueryPlayerResultsMessage{
-			clientid:  clientid,
-			sessionid: sessionid,
-			pin:       session.Gamepin,
+		s.msghub.Send(messaging.GamesTopic, common.QueryPlayerResultsMessage{
+			Clientid:  clientid,
+			Sessionid: sessionid,
+			Pin:       session.Gamepin,
 		})
 		return
 
 	case "answer":
 		playerAnswer, err := strconv.Atoi(m.arg)
 		if err != nil {
-			s.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
-				sessionid:  sessionid,
-				message:    "could not parse answer",
-				nextscreen: "",
+			s.msghub.Send(messaging.SessionsTopic, common.ErrorToSessionMessage{
+				Sessionid:  sessionid,
+				Message:    "could not parse answer",
+				Nextscreen: "",
 			})
 			return
 		}
 
 		if session.Gamepin < 0 {
-			s.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
-				sessionid:  sessionid,
-				message:    "could not get game pin for this session",
-				nextscreen: "entrance",
+			s.msghub.Send(messaging.SessionsTopic, common.ErrorToSessionMessage{
+				Sessionid:  sessionid,
+				Message:    "could not get game pin for this session",
+				Nextscreen: "entrance",
 			})
 			return
 		}
 
-		s.msghub.Send(messaging.GamesTopic, RegisterAnswerMessage{
-			clientid:  clientid,
-			sessionid: sessionid,
-			pin:       session.Gamepin,
-			answer:    playerAnswer,
+		s.msghub.Send(messaging.GamesTopic, common.RegisterAnswerMessage{
+			Clientid:  clientid,
+			Sessionid: sessionid,
+			Pin:       session.Gamepin,
+			Answer:    playerAnswer,
 		})
 		return
 
 	case "host-back-to-start":
-		s.msghub.Send(messaging.SessionsTopic, SessionToScreenMessage{
-			sessionid:  sessionid,
-			nextscreen: "entrance",
+		s.msghub.Send(messaging.SessionsTopic, common.SessionToScreenMessage{
+			Sessionid:  sessionid,
+			Nextscreen: "entrance",
 		})
 		return
 
 	case "cancel-game":
-		s.msghub.Send(messaging.GamesTopic, CancelGameMessage{
-			clientid:  clientid,
-			sessionid: sessionid,
-			pin:       session.Gamepin,
+		s.msghub.Send(messaging.GamesTopic, common.CancelGameMessage{
+			Clientid:  clientid,
+			Sessionid: sessionid,
+			Pin:       session.Gamepin,
 		})
 		return
 
 	case "host-game":
-		s.msghub.Send(messaging.SessionsTopic, SessionToScreenMessage{
-			sessionid:  sessionid,
-			nextscreen: "host-select-quiz",
+		s.msghub.Send(messaging.SessionsTopic, common.SessionToScreenMessage{
+			Sessionid:  sessionid,
+			Nextscreen: "host-select-quiz",
 		})
 		return
 
 	case "host-game-lobby":
 		quizid, err := strconv.Atoi(m.arg)
 		if err != nil {
-			s.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
-				sessionid:  sessionid,
-				message:    "expected int argument",
-				nextscreen: "host-select-quiz",
+			s.msghub.Send(messaging.SessionsTopic, common.ErrorToSessionMessage{
+				Sessionid:  sessionid,
+				Message:    "expected int argument",
+				Nextscreen: "host-select-quiz",
 			})
 			return
 		}
 
-		s.msghub.Send(messaging.GamesTopic, HostGameLobbyMessage{
-			clientid:  clientid,
-			sessionid: sessionid,
-			quizid:    quizid,
+		s.msghub.Send(messaging.GamesTopic, common.HostGameLobbyMessage{
+			Clientid:  clientid,
+			Sessionid: sessionid,
+			Quizid:    quizid,
 		})
 		return
 
 	case "start-game":
-		s.msghub.Send(messaging.GamesTopic, StartGameMessage{
-			clientid:  clientid,
-			sessionid: sessionid,
-			pin:       session.Gamepin,
+		s.msghub.Send(messaging.GamesTopic, common.StartGameMessage{
+			Clientid:  clientid,
+			Sessionid: sessionid,
+			Pin:       session.Gamepin,
 		})
 		return
 
 	case "show-results":
-		s.msghub.Send(messaging.GamesTopic, ShowResultsMessage{
-			clientid:  clientid,
-			sessionid: sessionid,
-			pin:       session.Gamepin,
+		s.msghub.Send(messaging.GamesTopic, common.ShowResultsMessage{
+			Clientid:  clientid,
+			Sessionid: sessionid,
+			Pin:       session.Gamepin,
 		})
 		return
 
 	case "query-host-results":
-		s.msghub.Send(messaging.GamesTopic, QueryHostResultsMessage{
-			clientid:  clientid,
-			sessionid: sessionid,
-			pin:       session.Gamepin,
+		s.msghub.Send(messaging.GamesTopic, common.QueryHostResultsMessage{
+			Clientid:  clientid,
+			Sessionid: sessionid,
+			Pin:       session.Gamepin,
 		})
 		return
 
 	case "next-question":
-		s.msghub.Send(messaging.GamesTopic, NextQuestionMessage{
-			clientid:  clientid,
-			sessionid: sessionid,
-			pin:       session.Gamepin,
+		s.msghub.Send(messaging.GamesTopic, common.NextQuestionMessage{
+			Clientid:  clientid,
+			Sessionid: sessionid,
+			Pin:       session.Gamepin,
 		})
 		return
 
 	case "delete-game":
-		s.msghub.Send(messaging.GamesTopic, DeleteGameMessage{
-			clientid:  clientid,
-			sessionid: sessionid,
-			pin:       session.Gamepin,
+		s.msghub.Send(messaging.GamesTopic, common.DeleteGameMessage{
+			Clientid:  clientid,
+			Sessionid: sessionid,
+			Pin:       session.Gamepin,
 		})
 		return
 
 	default:
-		s.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
-			sessionid:  sessionid,
-			message:    "invalid command",
-			nextscreen: "",
+		s.msghub.Send(messaging.SessionsTopic, common.ErrorToSessionMessage{
+			Sessionid:  sessionid,
+			Message:    "invalid command",
+			Nextscreen: "",
 		})
 		return
 	}

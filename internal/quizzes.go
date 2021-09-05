@@ -56,8 +56,7 @@ func InitQuizzes(msghub *messaging.MessageHub, engine *PersistenceEngine) (*Quiz
 	}, nil
 }
 
-func (q *Quizzes) Run() {
-	shutdownChan := shutdown.GetShutdownChan()
+func (q *Quizzes) Run(shutdownChan chan struct{}) {
 	topic := q.msghub.GetTopic(messaging.QuizzesTopic)
 	for {
 		select {
@@ -71,12 +70,20 @@ func (q *Quizzes) Run() {
 				continue
 			}
 			switch m := msg.(type) {
-			case SendQuizzesToClientMessage:
+			case common.SendQuizzesToClientMessage:
 				q.processSendQuizzesToClientMessage(m)
-			case LookupQuizForGameMessage:
+			case common.LookupQuizForGameMessage:
 				q.processLookupQuizForGameMessage(m)
-			case DeleteQuizMessage:
+			case common.DeleteQuizMessage:
 				q.processDeleteQuizMessage(m)
+			case *common.GetQuizzesMessage:
+				q.processGetQuizzesMessage(m)
+			case *common.GetQuizMessage:
+				q.processGetQuizMessage(m)
+			case *common.AddQuizMessage:
+				q.processAddQuizMessage(m)
+			case *common.UpdateQuizMessage:
+				q.processUpdateQuizMessage(m)
 			default:
 				log.Printf("unrecognized message type %T received on %s topic", msg, messaging.QuizzesTopic)
 			}
@@ -84,39 +91,63 @@ func (q *Quizzes) Run() {
 	}
 }
 
-func (q *Quizzes) processDeleteQuizMessage(msg DeleteQuizMessage) {
-	q.delete(msg.quizid)
+func (q *Quizzes) processUpdateQuizMessage(msg *common.UpdateQuizMessage) {
+	msg.Result <- q.update(msg.Quiz)
+	close(msg.Result)
 }
 
-func (q *Quizzes) processLookupQuizForGameMessage(msg LookupQuizForGameMessage) {
-	quiz, err := q.Get(msg.quizid)
+func (q *Quizzes) processAddQuizMessage(msg *common.AddQuizMessage) {
+	msg.Result <- q.add(msg.Quiz)
+	close(msg.Result)
+}
+
+func (q *Quizzes) processGetQuizMessage(msg *common.GetQuizMessage) {
+	quiz, err := q.get(msg.Quizid)
+	msg.Result <- common.GetQuizResult{
+		Quiz:  quiz,
+		Error: err,
+	}
+	close(msg.Result)
+}
+
+func (q *Quizzes) processGetQuizzesMessage(msg *common.GetQuizzesMessage) {
+	msg.Result <- q.getQuizzes()
+	close(msg.Result)
+}
+
+func (q *Quizzes) processDeleteQuizMessage(msg common.DeleteQuizMessage) {
+	q.delete(msg.Quizid)
+}
+
+func (q *Quizzes) processLookupQuizForGameMessage(msg common.LookupQuizForGameMessage) {
+	quiz, err := q.get(msg.Quizid)
 	if err != nil {
-		q.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
-			sessionid:  msg.sessionid,
-			message:    "error getting quiz in new game: " + err.Error(),
-			nextscreen: "host-select-quiz",
+		q.msghub.Send(messaging.SessionsTopic, common.ErrorToSessionMessage{
+			Sessionid:  msg.Sessionid,
+			Message:    "error getting quiz in new game: " + err.Error(),
+			Nextscreen: "host-select-quiz",
 		})
 		return
 	}
 
-	q.msghub.Send(messaging.GamesTopic, SetQuizForGameMessage{
-		pin:  msg.pin,
-		quiz: quiz,
+	q.msghub.Send(messaging.GamesTopic, common.SetQuizForGameMessage{
+		Pin:  msg.Pin,
+		Quiz: quiz,
 	})
 
-	q.msghub.Send(messaging.SessionsTopic, SessionToScreenMessage{
-		sessionid:  msg.sessionid,
-		nextscreen: "host-game-lobby",
+	q.msghub.Send(messaging.SessionsTopic, common.SessionToScreenMessage{
+		Sessionid:  msg.Sessionid,
+		Nextscreen: "host-game-lobby",
 	})
 }
 
-func (q *Quizzes) processSendQuizzesToClientMessage(msg SendQuizzesToClientMessage) {
+func (q *Quizzes) processSendQuizzesToClientMessage(msg common.SendQuizzesToClientMessage) {
 	type quizMeta struct {
 		Id   int    `json:"id"`
 		Name string `json:"name"`
 	}
 	ml := []quizMeta{}
-	for _, quiz := range q.GetQuizzes() {
+	for _, quiz := range q.getQuizzes() {
 		ml = append(ml, quizMeta{
 			Id:   quiz.Id,
 			Name: quiz.Name,
@@ -125,21 +156,21 @@ func (q *Quizzes) processSendQuizzesToClientMessage(msg SendQuizzesToClientMessa
 
 	encoded, err := common.ConvertToJSON(&ml)
 	if err != nil {
-		q.msghub.Send(messaging.SessionsTopic, ErrorToSessionMessage{
-			sessionid:  msg.sessionid,
-			message:    fmt.Sprintf("error encoding json: %v", err),
-			nextscreen: "host-select-quiz",
+		q.msghub.Send(messaging.SessionsTopic, common.ErrorToSessionMessage{
+			Sessionid:  msg.Sessionid,
+			Message:    fmt.Sprintf("error encoding json: %v", err),
+			Nextscreen: "host-select-quiz",
 		})
 		return
 	}
-	q.msghub.Send(messaging.ClientHubTopic, ClientMessage{
-		clientid: msg.clientid,
-		message:  "all-quizzes " + encoded,
+	q.msghub.Send(messaging.ClientHubTopic, common.ClientMessage{
+		Clientid: msg.Clientid,
+		Message:  "all-quizzes " + encoded,
 	})
 }
 
 // called by REST API
-func (q *Quizzes) GetQuizzes() []common.Quiz {
+func (q *Quizzes) getQuizzes() []common.Quiz {
 	q.mutex.RLock()
 	defer q.mutex.RUnlock()
 	ids := make([]int, len(q.all))
@@ -159,7 +190,7 @@ func (q *Quizzes) GetQuizzes() []common.Quiz {
 }
 
 // called by REST API
-func (q *Quizzes) Get(id int) (common.Quiz, error) {
+func (q *Quizzes) get(id int) (common.Quiz, error) {
 	q.mutex.RLock()
 	defer q.mutex.RUnlock()
 	quiz, ok := q.all[id]
@@ -180,7 +211,7 @@ func (q *Quizzes) delete(id int) {
 }
 
 // called by REST API
-func (q *Quizzes) Add(quiz common.Quiz) error {
+func (q *Quizzes) add(quiz common.Quiz) error {
 	var err error
 	quiz.Id, err = q.nextID()
 	if err != nil {
@@ -204,7 +235,7 @@ func (q *Quizzes) Add(quiz common.Quiz) error {
 }
 
 // called by REST API
-func (q *Quizzes) Update(quiz common.Quiz) error {
+func (q *Quizzes) update(quiz common.Quiz) error {
 	q.mutex.Lock()
 	q.all[quiz.Id] = quiz
 	q.mutex.Unlock()

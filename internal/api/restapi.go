@@ -10,31 +10,14 @@ import (
 	"strings"
 
 	"github.com/kwkoo/go-quiz/internal/common"
+	"github.com/kwkoo/go-quiz/internal/messaging"
 )
 
-type QuizApp interface {
-	GetQuizzes() []common.Quiz
-	GetQuiz(int) (common.Quiz, error)
-	DeleteQuiz(int)
-	AddQuiz(common.Quiz) error
-	UpdateQuiz(common.Quiz) error
-	ExtendSessionExpiry(string)
-	GetSessions() []common.Session
-	GetSession(string) *common.Session
-	DeleteSession(string)
-	GetGames() []common.Game
-	GetGame(int) (common.Game, error)
-	DeleteGame(int)
-	UpdateGame(common.Game)
-	RemoveGameFromSessions([]string)
-	SendClientsToScreen([]string, string)
-}
-
 type RestApi struct {
-	hub QuizApp
+	hub *messaging.MessageHub
 }
 
-func InitRestApi(hub QuizApp) *RestApi {
+func InitRestApi(hub *messaging.MessageHub) *RestApi {
 	return &RestApi{hub: hub}
 }
 
@@ -66,7 +49,7 @@ func (api *RestApi) Quiz(w http.ResponseWriter, r *http.Request) {
 		last := lastPart(r.URL.Path)
 		id, err := strconv.Atoi(last)
 		if err != nil {
-			allQuizzes := api.hub.GetQuizzes()
+			allQuizzes := api.getQuizzes()
 			w.Header().Add("Content-Type", "application/json")
 			enc := json.NewEncoder(w)
 			if err := enc.Encode(allQuizzes); err != nil {
@@ -76,7 +59,7 @@ func (api *RestApi) Quiz(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		quiz, err := api.hub.GetQuiz(id)
+		quiz, err := api.getQuiz(id)
 		if err != nil {
 			streamResponse(w, false, fmt.Sprintf("quiz %d does not exist", id))
 			return
@@ -98,7 +81,7 @@ func (api *RestApi) Quiz(w http.ResponseWriter, r *http.Request) {
 			streamResponse(w, false, fmt.Sprintf("invalid id %s: %v", last, err))
 			return
 		}
-		api.hub.DeleteQuiz(id)
+		api.deleteQuiz(id)
 		streamResponse(w, true, "")
 		return
 	}
@@ -114,7 +97,7 @@ func (api *RestApi) Quiz(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		for _, q := range toImport {
-			if err := api.hub.AddQuiz(q); err != nil {
+			if err := api.addQuiz(q); err != nil {
 				streamResponse(w, false, fmt.Sprintf("error adding quiz: %v", err))
 				continue
 			}
@@ -132,7 +115,7 @@ func (api *RestApi) Quiz(w http.ResponseWriter, r *http.Request) {
 
 	if toImport.Id == 0 {
 		// no ID, so treat this as an add operation
-		if err := api.hub.AddQuiz(toImport); err != nil {
+		if err := api.addQuiz(toImport); err != nil {
 			streamResponse(w, false, fmt.Sprintf("error adding quiz: %v", err))
 			return
 		}
@@ -141,7 +124,7 @@ func (api *RestApi) Quiz(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// update
-	api.hub.UpdateQuiz(toImport)
+	api.updateQuiz(toImport)
 	streamResponse(w, true, "")
 }
 
@@ -151,7 +134,7 @@ func (api *RestApi) ExtendSession(w http.ResponseWriter, r *http.Request) {
 		streamResponse(w, false, "invalid session id")
 		return
 	}
-	api.hub.ExtendSessionExpiry(id)
+	api.extendSessionExpiry(id)
 	streamResponse(w, true, "")
 }
 
@@ -159,7 +142,7 @@ func (api *RestApi) Session(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		if strings.HasSuffix(r.URL.Path, "/session") {
 			// get all sessions
-			all := api.hub.GetSessions()
+			all := api.getSessions()
 			w.Header().Add("Content-Type", "application/json")
 			enc := json.NewEncoder(w)
 			if err := enc.Encode(all); err != nil {
@@ -173,7 +156,7 @@ func (api *RestApi) Session(w http.ResponseWriter, r *http.Request) {
 			streamResponse(w, false, "invalid session id")
 			return
 		}
-		sessions := api.hub.GetSession(id)
+		sessions := api.getSession(id)
 		if sessions == nil {
 			streamResponse(w, false, fmt.Sprintf("invalid session id %s", id))
 			return
@@ -192,7 +175,7 @@ func (api *RestApi) Session(w http.ResponseWriter, r *http.Request) {
 			streamResponse(w, false, "invalid session id")
 			return
 		}
-		api.hub.DeleteSession(id)
+		api.deleteSession(id)
 		streamResponse(w, true, "")
 		return
 	}
@@ -204,7 +187,7 @@ func (api *RestApi) Game(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		if strings.HasSuffix(r.URL.Path, "/game") {
 			// get all games
-			all := api.hub.GetGames()
+			all := api.getGames()
 			w.Header().Add("Content-Type", "application/json")
 			enc := json.NewEncoder(w)
 			if err := enc.Encode(all); err != nil {
@@ -223,7 +206,7 @@ func (api *RestApi) Game(w http.ResponseWriter, r *http.Request) {
 			streamResponse(w, false, fmt.Sprintf("invalid game id %s: %v", last, err))
 			return
 		}
-		game, err := api.hub.GetGame(pin)
+		game, err := api.getGame(pin)
 		if err != nil {
 			streamResponse(w, false, fmt.Sprintf("error getting game %d: %v", pin, err))
 			return
@@ -248,7 +231,7 @@ func (api *RestApi) Game(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		game, err := api.hub.GetGame(pin)
+		game, err := api.getGame(pin)
 		if err != nil {
 			streamResponse(w, false, fmt.Sprintf("could not get game with pin %d: %v", pin, err))
 			return
@@ -256,10 +239,10 @@ func (api *RestApi) Game(w http.ResponseWriter, r *http.Request) {
 
 		// remove players and host from game
 		players := append(game.GetPlayers(), game.Host)
-		api.hub.RemoveGameFromSessions(players)
-		api.hub.SendClientsToScreen(players, "entrance")
+		api.removeGameFromSessions(players)
+		api.sendClientsToScreen(players, "entrance")
 
-		api.hub.DeleteGame(pin)
+		api.deleteGame(pin)
 		streamResponse(w, true, "")
 		return
 	}
@@ -272,12 +255,131 @@ func (api *RestApi) Game(w http.ResponseWriter, r *http.Request) {
 			streamResponse(w, false, fmt.Sprintf("error decoding game JSON: %v", err))
 			return
 		}
-		api.hub.UpdateGame(game)
+		api.updateGame(game)
 		streamResponse(w, true, "")
 		return
 	}
 
 	http.Error(w, "unsupported method", http.StatusNotImplemented)
+}
+
+func (api *RestApi) getQuizzes() []common.Quiz {
+	c := make(chan []common.Quiz)
+	api.hub.Send(messaging.QuizzesTopic, &common.GetQuizzesMessage{
+		Result: c,
+	})
+	return <-c
+}
+
+func (api *RestApi) getQuiz(id int) (common.Quiz, error) {
+	c := make(chan common.GetQuizResult)
+	api.hub.Send(messaging.QuizzesTopic, &common.GetQuizMessage{
+		Quizid: id,
+		Result: c,
+	})
+	result := <-c
+	return result.Quiz, result.Error
+}
+
+func (api *RestApi) deleteQuiz(id int) {
+	api.hub.Send(messaging.QuizzesTopic, common.DeleteQuizMessage{Quizid: id})
+}
+
+func (api *RestApi) addQuiz(q common.Quiz) error {
+	c := make(chan error)
+	api.hub.Send(messaging.QuizzesTopic, &common.AddQuizMessage{
+		Quiz:   q,
+		Result: c,
+	})
+	return <-c
+}
+
+// used by the REST API
+func (api *RestApi) updateQuiz(q common.Quiz) error {
+	c := make(chan error)
+	api.hub.Send(messaging.QuizzesTopic, &common.UpdateQuizMessage{
+		Quiz:   q,
+		Result: c,
+	})
+	return <-c
+}
+
+// used by the REST API
+func (api *RestApi) extendSessionExpiry(id string) {
+	api.hub.Send(messaging.SessionsTopic, common.ExtendSessionExpiryMessage{
+		Sessionid: id,
+	})
+}
+
+// used by the REST API
+func (api *RestApi) getSessions() []common.Session {
+	c := make(chan []common.Session)
+	api.hub.Send(messaging.SessionsTopic, &common.GetSessionsMessage{
+		Result: c,
+	})
+	return <-c
+}
+
+// used by the REST API
+func (api *RestApi) getSession(id string) *common.Session {
+	c := make(chan *common.Session)
+	api.hub.Send(messaging.SessionsTopic, &common.GetSessionMessage{
+		Sessionid: id,
+		Result:    c,
+	})
+	return <-c
+}
+
+// used by the REST API
+func (api *RestApi) deleteSession(id string) {
+	api.hub.Send(messaging.SessionsTopic, common.DeleteSessionMessage{
+		Sessionid: id,
+	})
+}
+
+// used by the REST API
+func (api *RestApi) getGames() []common.Game {
+	c := make(chan []common.Game)
+	api.hub.Send(messaging.GamesTopic, &common.GetGamesMessage{
+		Result: c,
+	})
+	return <-c
+}
+
+// used by the REST API
+func (api *RestApi) getGame(id int) (common.Game, error) {
+	c := make(chan common.GetGameResult)
+	api.hub.Send(messaging.GamesTopic, &common.GetGameMessage{
+		Pin:    id,
+		Result: c,
+	})
+	result := <-c
+	return result.Game, result.Error
+}
+
+// used by the REST API
+func (api *RestApi) deleteGame(id int) {
+	api.hub.Send(messaging.GamesTopic, common.DeleteGameByPin{Pin: id})
+}
+
+// used by the REST API
+func (api *RestApi) updateGame(g common.Game) {
+	api.hub.Send(messaging.GamesTopic, g)
+}
+
+func (api *RestApi) removeGameFromSessions(sessionids []string) {
+	api.hub.Send(messaging.SessionsTopic, common.DeregisterGameFromSessionsMessage{
+		Sessions: sessionids,
+	})
+}
+
+func (api *RestApi) sendClientsToScreen(sessionids []string, screen string) {
+	for _, id := range sessionids {
+		api.hub.Send(messaging.SessionsTopic, common.SessionToScreenMessage{
+			Sessionid:  id,
+			Nextscreen: screen,
+		})
+	}
 }
 
 // returns the part beyond the last slash in the URL
