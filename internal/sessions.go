@@ -131,7 +131,7 @@ func (s *Sessions) Run(shutdownChan chan struct{}) {
 }
 
 func (s *Sessions) processGetSessionsMessage(msg *common.GetSessionsMessage) {
-	msg.Result <- s.GetAll()
+	msg.Result <- s.getAll()
 	close(msg.Result)
 }
 
@@ -146,7 +146,7 @@ func (s *Sessions) processDeregisterClientMessage(msg common.DeregisterClientMes
 }
 
 func (s *Sessions) processDeleteSessionMessage(msg common.DeleteSessionMessage) {
-	session := s.GetSession(msg.Sessionid)
+	session := s.getSession(msg.Sessionid)
 	if session == nil {
 		return
 	}
@@ -165,7 +165,7 @@ func (s *Sessions) processSetSessionGamePinMessage(msg common.SetSessionGamePinM
 }
 
 func (s *Sessions) processSessionMessage(msg common.SessionMessage) {
-	sess := s.GetSession(msg.Sessionid)
+	sess := s.getSession(msg.Sessionid)
 	if sess == nil {
 		// session doesn't exist
 		log.Printf("session %s does not exist", msg.Sessionid)
@@ -182,7 +182,7 @@ func (s *Sessions) processSetSessionScreenMessage(msg common.SetSessionScreenMes
 }
 
 func (s *Sessions) processSessionToScreenMessage(msg common.SessionToScreenMessage) {
-	session := s.GetSession(msg.Sessionid)
+	session := s.getSession(msg.Sessionid)
 	if session == nil {
 		// session doesn't exist
 		log.Printf("session %s does not exist", msg.Sessionid)
@@ -282,7 +282,7 @@ func (s *Sessions) processClientCommand(m *ClientCommand) {
 			clientid := m.client
 			sessionid := m.arg
 
-			session := s.GetSession(sessionid)
+			session := s.getSession(sessionid)
 			if session == nil {
 				session = s.newSession(sessionid, m.client, "entrance")
 			} else {
@@ -555,7 +555,7 @@ func (s *Sessions) newSession(id string, clientid uint64, screen string) *common
 }
 
 func (s *Sessions) extendSessionExpiry(id string) {
-	session := s.GetSession(id)
+	session := s.getSession(id)
 
 	if session == nil {
 		return
@@ -597,7 +597,7 @@ func (s *Sessions) persist(session *common.Session) {
 }
 
 // called by REST API
-func (s *Sessions) GetAll() []common.Session {
+func (s *Sessions) getAll() []common.Session {
 	all := []common.Session{}
 	s.mutex.RLock()
 	for _, v := range s.all {
@@ -616,7 +616,7 @@ func (s *Sessions) deleteSession(id string) {
 }
 
 func (s *Sessions) getClientIDForSession(id string) uint64 {
-	session := s.GetSession(id)
+	session := s.getSession(id)
 
 	if session == nil {
 		return 0
@@ -629,7 +629,7 @@ func (s *Sessions) updateClientIDForSession(id string, newclientid uint64) {
 	if id == "" {
 		return
 	}
-	session := s.GetSession(id)
+	session := s.getSession(id)
 
 	if session == nil {
 		return
@@ -651,7 +651,7 @@ func (s *Sessions) updateClientIDForSession(id string, newclientid uint64) {
 }
 
 // also called by REST API
-func (s *Sessions) GetSession(id string) *common.Session {
+func (s *Sessions) getSession(id string) *common.Session {
 	s.mutex.RLock()
 	session, ok := s.all[id]
 	s.mutex.RUnlock()
@@ -688,7 +688,7 @@ func (s *Sessions) GetSession(id string) *common.Session {
 }
 
 func (s *Sessions) registerSessionInGame(id, name string, pin int) {
-	session := s.GetSession(id)
+	session := s.getSession(id)
 
 	if session == nil {
 		return
@@ -702,7 +702,7 @@ func (s *Sessions) registerSessionInGame(id, name string, pin int) {
 }
 
 func (s *Sessions) deregisterGameFromSession(id string) {
-	session := s.GetSession(id)
+	session := s.getSession(id)
 
 	if session == nil {
 		return
@@ -716,7 +716,7 @@ func (s *Sessions) deregisterGameFromSession(id string) {
 }
 
 func (s *Sessions) setSessionScreen(id, screen string) {
-	session := s.GetSession(id)
+	session := s.getSession(id)
 
 	if session == nil {
 		return
@@ -729,7 +729,7 @@ func (s *Sessions) setSessionScreen(id, screen string) {
 }
 
 func (s *Sessions) setSessionGamePin(id string, pin int) {
-	session := s.GetSession(id)
+	session := s.getSession(id)
 
 	if session == nil {
 		return
@@ -745,7 +745,7 @@ func (s *Sessions) setSessionGamePin(id string, pin int) {
 // username:password).
 // Returns true if user is authenticated.
 func (s *Sessions) authenticateAdmin(id, credentials string) bool {
-	session := s.GetSession(id)
+	session := s.getSession(id)
 	if session.Admin {
 		return true
 	}
