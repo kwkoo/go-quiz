@@ -340,9 +340,13 @@ var app = new Vue({
                         this.hostgamelobby.data = JSON.parse(arg)
                         let url = document.location.protocol + "//" + document.location.host + "?pin=" + this.hostgamelobby.data.pin
                         this.hostgamelobby.link = url
+
+                        // size QR code based on viewport
+                        let qrSize = Math.min(window.innerWidth, window.innerHeight) * 0.6
+
                         let qr = new QRious({
                             element: document.getElementById('qr'),
-                            size: 300,
+                            size: qrSize,
                             value: url
                         })
                         this.updateHostGameLobbyText()
