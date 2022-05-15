@@ -800,6 +800,14 @@ func (g *Games) persist(game *common.Game) {
 
 // called by the REST API
 func (g *Games) getAll() []common.Game {
+	if g.engine == nil {
+		all := []common.Game{}
+		for _, game := range g.all {
+			all = append(all, *game)
+		}
+		return all
+	}
+
 	keys, err := g.engine.GetKeys("game")
 	if err != nil {
 		log.Printf("error getting all game keys from persistent store: %v", err)
