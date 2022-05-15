@@ -14,13 +14,13 @@
   <div id="app">
 
     <div v-show="screen === 'start'">
-      <h2 class="title">Connecting to server...</h2>
+      <div class="title">Connecting to server...</div>
       <div class="center"><img src="images/ajax-loader.gif"></div>
     </div>
 
 
     <div v-show="screen === 'entrance'">
-      <h1 class="title">Join a Game</h1>
+      <div class="title">Join a Game</div>
       <form v-on:submit.prevent>
         <div>
           <label class="label">Name</label>
@@ -43,7 +43,7 @@
 
 
     <div v-show="screen === 'wait-for-game-start'">
-      <h2 class="title">Waiting for game to start...</h2>
+      <div class="title">Waiting for game to start...</div>
       <div class="center"><img src="images/ajax-loader.gif"></div>
     </div>
 
@@ -54,7 +54,7 @@
 
 
     <div v-show="screen === 'wait-for-question-end'">
-      <h2 class="title">Waiting for all players to answer...</h2>
+      <div class="title">Waiting for all players to answer...</div>
       <div class="center"><img src="images/ajax-loader.gif"></div>
     </div>
 
@@ -66,7 +66,7 @@
 
 
     <div v-show="screen === 'authenticate-user'">
-      <h1 class="title">Admin Authentication</h1>
+      <div class="title">Admin Authentication</div>
       <form v-on:submit.prevent>
         <div>
           <label class="label">Username</label>
@@ -90,8 +90,10 @@
 
     <div v-show="screen === 'host-select-quiz'">
       <button class="transparent" v-on:click="sendHostBackToStart">Back</button>
-      <h1 class="title">Start a Game</h1>
-      <h4 class="subtitle">Choose a game below or create your own!</h4><!-- todo: put a link to creator here -->
+      <div class="title">Start a Game</div>
+      <br/>
+      <div class="subtitle">Choose a game below or create your own!</div><!-- todo: put a link to creator here -->
+      <br/><br/>
       <div class="gamelist">
         <div v-for="quiz in hostselectquiz.quizzes">
           <button class="gamebutton" :disabled='hostselectquiz.disabled' v-on:click="hostSelectQuiz(quiz.id)">{{ quiz.name }}</button>
@@ -108,8 +110,8 @@
       <br/>
       <div class="center"><a v-bind:href="hostgamelobby.link">{{ hostgamelobby.link }}</a></div>
       <br/>
-      <h2 class="title">Join this game using the Game Pin:</h2>
-      <h1 class="gamepintext">{{ hostgamelobby.data.pin }}</h1>
+      <div class="label">Join this game using the Game Pin:</div>
+      <div class="gamepintext">{{ hostgamelobby.data.pin }}</div>
       <textarea class="players" rows="10" readonly>{{ hostgamelobby.textarea }}</textarea>
       <br/>
       <button class="start" :disabled='hostgamelobby.disabled' v-on:click="startGame">Start Game</button>
@@ -117,9 +119,9 @@
 
 
     <div v-show="screen === 'host-show-question'">
-      <h4 class="questionheader">Question {{ hostshowquestion.data.questionindex + 1 }} / {{ hostshowquestion.data.totalquestions }}</h4>
-      <h4 class="questionheader">Players Answered: {{ hostshowquestion.data.answered }} / {{ hostshowquestion.data.totalplayers }}</h4>
-      <h3 class="questionsubheader">Time Left: {{ hostshowquestion.data.timeleft }}</h3>
+      <div class="questionheader">Question {{ hostshowquestion.data.questionindex + 1 }} / {{ hostshowquestion.data.totalquestions }}</div>
+      <div class="questionheader">Players Answered: {{ hostshowquestion.data.answered }} / {{ hostshowquestion.data.totalplayers }}</div>
+      <div class="questionsubheader">Time Left: {{ hostshowquestion.data.timeleft }}</div>
 
       <div class="blockscontainer">
         <!--
@@ -128,16 +130,16 @@
         <div v-for="(vote, index) in hostshowquestion.data.votes" class="square" v-bind:class="{option0: index==0, option1: index==1, option2: index==2, option3: index==3}" v-bind:style="{ height: (vote * 100 / hostshowquestion.data.totalplayers) + 'px' }"></div>
       </div>
 
-      <h2 class="questionsubheader">{{ hostshowquestion.data.question }}</h2>
+      <div class="questionsubheader">{{ hostshowquestion.data.question }}</div>
       <div v-for="(answer, index) in hostshowquestion.data.answers">
-        <h3 class="answer" v-bind:class="{option0: index==0, option1: index==1, option2: index==2, option3: index==3}">{{ answer }}</h3>
+        <div class="answer" v-bind:class="{option0: index==0, option1: index==1, option2: index==2, option3: index==3}">{{ answer }}</div>
         <br/>
       </div>
     </div>
 
 
     <div v-show="screen === 'host-show-results'">
-      <h4 class="questionheader">Question {{ hostshowresults.data.questionindex + 1 }} / {{ hostshowresults.data.totalquestions }}</h4>
+      <div class="questionheader">Question {{ hostshowresults.data.questionindex + 1 }} / {{ hostshowresults.data.totalquestions }}</div>
 
       <div class="columns">
         <div class="blockscontainer">
@@ -147,7 +149,7 @@
           <div v-for="(vote, index) in hostshowresults.data.votes" class="square" v-bind:class="{option0: index==0, option1: index==1, option2: index==2, option3: index==3}" v-bind:style="{ height: (vote * 100 / hostshowresults.data.totalplayers) + 'px' }"></div>
         </div>
         <div class="scorepanel">
-          <h3 class="questionsubheader">Top Scorers</h3>
+          <div class="questionsubheader">Top Scorers</div>
           <template v-for="player in hostshowresults.data.topscorers">
             <div class="questionsubheader">{{ player.name }} - {{ player.score }}</div>
           </template>
@@ -159,13 +161,13 @@
         <h3 v-bind:style="{ filter: (hostshowresults.data.correct == index ? 'none' : 'grayscale(95%)') }" class="answer" v-bind:class="{option0: index==0, option1: index==1, option2: index==2, option3: index==3}"><span v-if="hostshowresults.data.correct == index">&#10004 </span>{{ answer }}</h3>
         <br/>
       </div>
-      <button class="button" :disabled="hostshowresults.disabled" v-on:click="hostNextQuestion">Next Question</button>
+      <button class="buttonauth" :disabled="hostshowresults.disabled" v-on:click="hostNextQuestion">Next Question</button>
     </div>
 
 
     <div v-show="screen === 'host-show-game-results'">
-      <h2 class="winnertitle">Top Players</h2>
-      <h3 class="winner" v-for="(p, index) in hostshowgameresults.data">{{ index + 1 }}. {{ p.name }} - {{ p.score }}</h3>
+      <div class="winnertitle">Top Players</div>
+      <div class="winner" v-for="(p, index) in hostshowgameresults.data">{{ index + 1 }}. {{ p.name }} - {{ p.score }}</div>
       <div class="center">
         <button class="buttonauth" :disabled="hostshowgameresults.disabled" v-on:click="saveWinners">Export Winners</button>
         <button class="buttonauth" :disabled="hostshowgameresults.disabled" v-on:click="deleteGame">Delete Game</button>
@@ -174,7 +176,7 @@
 
 
     <div v-show="screen === 'error'">
-      <h2 class="subtitle">{{ error.message }}</h2>
+      <div class="subtitle">{{ error.message }}</div>
       <button ref="errorok" class="button" :disabled="error.disabled" v-show="(error.next != null) && (error.next.length > 0)" v-on:click="dismissError">OK</button>
     </div>
 

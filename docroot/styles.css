@@ -9,17 +9,17 @@ body {
 }
 
 .title {
-    font-size: 5vw;
+    font-size: 10vw;
     clear: right;
 }
 
 .subtitle {
-    font-size: 3vw;
+    font-size: 8vw;
 }
 
 .label {
     display: block;
-    font-size: 2vw;
+    font-size: 5vw;
 }
 
 .forminput {
@@ -32,7 +32,7 @@ body {
     box-sizing: border-box;
     margin-right: auto;
     margin-left: auto;
-    font-size: 2vw;
+    font-size: 5vw;
     text-align: center;
 }
 
@@ -47,7 +47,7 @@ body {
     display: block;
     margin-right: auto;
     margin-left: auto;
-    font-size: 2vw;
+    font-size: 5vw;
     background-color: #3A3B3A;
 }
 

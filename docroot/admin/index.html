@@ -14,11 +14,11 @@
 
     <!-- list quizzes screen -->
     <div v-show="screen === 'start'">
-      <h1 class="title">Quiz Admin</h1>
+      <div class="title">Quiz Admin</div>
 
       <div v-show="list.quizzes == null" class="center"><img src="/images/ajax-loader.gif"></div>
       <div v-show="list.quizzes != null" class="box">
-        <h2 class="subtitle">All Quizzes</h2>
+        <div class="subtitle">All Quizzes</div>
         <table v-show="list.quizzes != null">
           <tr><th>Name</th><th>Export</th><th>Delete</th></tr>
           <template v-for="(quiz, index) in list.quizzes" class="center">
@@ -48,7 +48,7 @@
 
       <div v-show="list.games == null" class="center"><img src="/images/ajax-loader.gif"></div>
       <div v-show="list.games != null" class="box">
-        <h2 class="subtitle">All Games</h2>
+        <div class="subtitle">All Games</div>
         <table v-show="list.games != null">
           <tr><th>Pin</th><th>Quiz Name</th><th>Number of Players</th><th>Question Index</th><th>Game State</th><th>Delete</th></tr>
           <template v-for="(game, index) in list.games" class="center">
@@ -67,7 +67,7 @@
 
       <div v-show="list.sessions == null" class="center"><img src="/images/ajax-loader.gif"></div>
       <div v-show="list.sessions != null" class="box">
-        <h2 class="subtitle">All Sessions</h2>
+        <div class="subtitle">All Sessions</div>
         <table v-show="list.sessions != null">
           <tr><th>ID</th><th>Client Connected</th><th>Screen</th><th>Expiry</th><th>Game Pin</th><th>Name</th><th>Admin</th><th>Extend / Delete</th></tr>
           <template v-for="(session, index) in list.sessions" class="center">
@@ -89,58 +89,58 @@
 
     <!-- quiz creator screen -->
     <div v-show="screen === 'creator'">
-      <h1 class="title">Quiz Creator Studio</h1>
+      <div class="title">Quiz Creator Studio</div>
 
       <div>
         <label class="commonTitle">Quiz Title</label>
-        <input v-model="quiz.name" type="text" />
+        <input class="commonTitle" v-model="quiz.name" type="text" />
       </div>
       <div>
         <label class="commonTitle">Question Duration</label>
-        <input v-model.number="quiz.questionDuration" type="number" />
+        <input class="commonTitle" v-model.number="quiz.questionDuration" type="number" />
       </div>
       <div>
         <label class="commonTitle">Shuffle Answers</label>
-        <input v-model="quiz.shuffleAnswers" type="checkbox" />
+        <input class="commonTitle" v-model="quiz.shuffleAnswers" type="checkbox" />
       </div>
-      <br><br>
+      <br/><br/>
       <!-- all questions -->
       <div v-for="(question, index) in quiz.questions">
         <!-- each question -->
         <div class="question-field" v-bind:class="{odd: index%2 == 1, even: index%2 == 0}">
-          <label>Question {{ index }}: </label>
-          <input v-model="question.question" class="question" type="text" />
+          <label class="question">Question {{ index }}: </label>
+          <input class="question" v-model="question.question" type="text" />
           <br><br>
-          <label>Answer 0: </label>
-          <input v-model="question.answers[0]" type="text" />
-          <label>Answer 1: </label>
-          <input v-model="question.answers[1]" type="text" />
+          <label class="question">Answer 0: </label>
+          <input class="question" v-model="question.answers[0]" type="text" />
+          <label class="question">Answer 1: </label>
+          <input class="question" v-model="question.answers[1]" type="text" />
           <br><br>
-          <label>Answer 2: </label>
-          <input v-model="question.answers[2]" type="text" />
-          <label>Answer 3: </label>
-          <input v-model="question.answers[3]" type="text" />
+          <label class="question">Answer 2: </label>
+          <input class="question" v-model="question.answers[2]" type="text" />
+          <label class="question">Answer 3: </label>
+          <input class="question" v-model="question.answers[3]" type="text" />
           <br><br>
-          <label>Correct Answer (0-3): </label>
-          <input v-model.number="question.correct" class="correct" type="number" />
+          <label class="question">Correct Answer (0-3): </label>
+          <input class="question" v-model.number="question.correct" class="correct" type="number" />
           <br><br>
-          <button v-on:click="deleteQuestion(index)">Delete Question</button>
+          <button class="smallButton" v-on:click="deleteQuestion(index)">Delete Question</button>
         </div>
         <br><br>
       </div>
       <br>
-      <button v-on:click="addQuestion">Add Another Question</button>
+      <button class="smallButton" v-on:click="addQuestion">Add Another Question</button>
       <br><br>
       <div>
-        <button v-on:click="updateQuiz">{{ quiz.id == null?'Create Quiz':'Update Quiz' }}</button>
+        <button class="smallButton" v-on:click="updateQuiz">{{ quiz.id == null?'Create Quiz':'Update Quiz' }}</button>
       </div>
       <br>
-      <button v-on:click="cancelQuiz">Cancel</button>
+      <button class="smallButton" v-on:click="cancelQuiz">Cancel</button>
     </div>
 
     <!-- edit game screen -->
     <div v-show="screen === 'editgame'">
-      <h1 class="title">Edit Game</h1>
+      <div class="title">Edit Game</div>
       <div>
         <table>
           <tr>
@@ -157,7 +157,7 @@
           </tr>
         </table>
         <br>
-        <button v-on:click="updateGame">Update Game</button>
+        <button class="smallButton" v-on:click="updateGame">Update Game</button>
       </div>
     </div>
 
