@@ -183,6 +183,7 @@ func (g *Game) setupQuestion(newIndex int) error {
 	if err != nil {
 		return err
 	}
+
 	g.GameState = QuestionInProgress
 	g.PlayersAnswered = make(map[string]struct{})
 	g.CorrectPlayers = make(map[string]struct{})

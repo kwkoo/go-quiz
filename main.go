@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"math/rand"
 	"net/http"
 	"time"
 	_ "time/tzdata"
@@ -30,7 +31,7 @@ func main() {
 	config := struct {
 		Port           int    `default:"8080" usage:"HTTP listener port"`
 		Docroot        string `usage:"HTML document root - will use the embedded docroot if not specified"`
-		RedisHost      string `default:"localhost:6379" usage:"Redis host and port"`
+		RedisHost      string `usage:"Redis host and port - will not connect to Redis if blank"`
 		RedisPassword  string `usage:"Redis password"`
 		AdminUser      string `default:"admin" usage:"Admin username"`
 		AdminPassword  string `usage:"Admin password"`
@@ -39,6 +40,9 @@ func main() {
 	if err := configparser.Parse(&config); err != nil {
 		log.Fatal(err)
 	}
+
+	// initialize random number generator - used for shuffling answers
+	rand.Seed(time.Now().UnixNano())
 
 	shutdown.InitShutdownHandler()
 
@@ -69,7 +73,10 @@ func main() {
 
 	mh := messaging.InitMessageHub()
 
-	persistenceEngine := internal.InitRedis(config.RedisHost, config.RedisPassword)
+	var persistenceEngine *internal.PersistenceEngine
+	if len(config.RedisHost) > 0 {
+		persistenceEngine = internal.InitRedis(config.RedisHost, config.RedisPassword)
+	}
 	quizzes, err := internal.InitQuizzes(mh, persistenceEngine)
 	if err != nil {
 		log.Fatal(err)

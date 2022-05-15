@@ -24,7 +24,7 @@ clean:
 
 test:
 	@go clean -testcache
-	@go test -v $(PREFIX)/$(PACKAGE)/pkg
+	@go test -v $(BASE)/...
 
 coverage:
 	@go test $(PREFIX)/$(PACKAGE)/pkg -cover -coverprofile=$(BASE)/$(COVERAGEOUTPUT)

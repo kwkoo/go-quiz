@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 )
 
 type QuizQuestion struct {
@@ -17,10 +18,38 @@ func (q QuizQuestion) NumAnswers() int {
 	return len(q.Answers)
 }
 
+func (q QuizQuestion) ShuffleAnswers() QuizQuestion {
+	places := []int{}
+	for i := 0; i < len(q.Answers); i++ {
+		places = append(places, i)
+	}
+
+	newIndex := []int{}
+	for len(places) > 0 {
+		selected := rand.Intn(len(places))
+		newIndex = append(newIndex, places[selected])
+		places = append(places[:selected], places[selected+1:]...)
+	}
+
+	q.Correct = newIndex[q.Correct]
+	newAnswers := make([]string, len(q.Answers))
+	for i, answer := range q.Answers {
+		newAnswers[newIndex[i]] = answer
+	}
+	q.Answers = newAnswers
+	return q
+}
+
+func (q QuizQuestion) String() string {
+	s, _ := ConvertToJSON(q)
+	return s
+}
+
 type Quiz struct {
 	Id               int            `json:"id"`
 	Name             string         `json:"name"`
 	QuestionDuration int            `json:"questionDuration"`
+	ShuffleAnswers   bool           `json:"shuffleAnswers"`
 	Questions        []QuizQuestion `json:"questions"`
 }
 

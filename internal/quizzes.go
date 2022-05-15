@@ -21,11 +21,6 @@ type Quizzes struct {
 }
 
 func InitQuizzes(msghub *messaging.MessageHub, engine *PersistenceEngine) (*Quizzes, error) {
-	if engine == nil {
-		log.Print("initializing quizzes with no persistence engine")
-		return &Quizzes{all: make(map[int]common.Quiz)}, nil
-	}
-
 	keys, err := engine.GetKeys("quiz")
 	if err != nil {
 		return nil, fmt.Errorf("could not retrieve keys from redis: %v", err)

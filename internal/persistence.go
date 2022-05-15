@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -48,11 +49,17 @@ func InitRedis(redisHost, redisPassword string) *PersistenceEngine {
 }
 
 func (engine *PersistenceEngine) Close() {
+	if engine == nil {
+		return
+	}
 	engine.pool.Close()
 	log.Print("persistence engine shutdown")
 }
 
 func (engine *PersistenceEngine) GetKeys(prefix string) ([]string, error) {
+	if engine == nil {
+		return []string{}, nil
+	}
 	conn := engine.pool.Get()
 	defer conn.Close()
 
@@ -77,6 +84,9 @@ func (engine *PersistenceEngine) GetKeys(prefix string) ([]string, error) {
 }
 
 func (engine *PersistenceEngine) Get(key string) ([]byte, error) {
+	if engine == nil {
+		return nil, nil
+	}
 	conn := engine.pool.Get()
 	defer conn.Close()
 
@@ -88,6 +98,9 @@ func (engine *PersistenceEngine) Get(key string) ([]byte, error) {
 }
 
 func (engine *PersistenceEngine) Set(key string, value []byte, expiry int) error {
+	if engine == nil {
+		return nil
+	}
 	conn := engine.pool.Get()
 	defer conn.Close()
 
@@ -104,6 +117,9 @@ func (engine *PersistenceEngine) Set(key string, value []byte, expiry int) error
 }
 
 func (engine *PersistenceEngine) Delete(key string) {
+	if engine == nil {
+		return
+	}
 	conn := engine.pool.Get()
 	defer conn.Close()
 
@@ -111,7 +127,9 @@ func (engine *PersistenceEngine) Delete(key string) {
 }
 
 func (engine *PersistenceEngine) Incr(counterKey string) (int, error) {
-
+	if engine == nil {
+		return 0, errors.New("Redis not configured")
+	}
 	conn := engine.pool.Get()
 	defer conn.Close()
 

@@ -191,7 +191,7 @@ func (g *Games) processNextQuestionMessage(msg common.NextQuestionMessage) {
 			Nextscreen: "host-show-question",
 		})
 
-		g.sendGamePlayersToAnswerQuestionScreen(msg.Sessionid, game)
+		g.sendGamePlayersToAnswerQuestionScreen(msg.Sessionid, *game)
 		return
 	}
 
@@ -260,7 +260,7 @@ func (g *Games) sendQuestionResultsToHost(client uint64, sessionid string, pin i
 		Message:  "question-results " + encoded,
 	})
 
-	return game, true
+	return *game, true
 }
 
 func (g *Games) sendGamePlayersToAnswerQuestionScreen(sessionid string, game common.Game) {
@@ -326,8 +326,8 @@ func (g *Games) processShowResultsMessage(msg common.ShowResultsMessage) {
 }
 
 // returns true if successful (treat it as an ok flag)
-func (g *Games) ensureUserIsGameHost(client uint64, sessionid string, pin int) (common.Game, bool) {
-	game, err := g.get(pin)
+func (g *Games) ensureUserIsGameHost(client uint64, sessionid string, pin int) (*common.Game, bool) {
+	game, err := g.getGamePointer(pin)
 	if err != nil {
 		g.msghub.Send(messaging.SessionsTopic, common.SetSessionGamePinMessage{
 			Sessionid: sessionid,
@@ -340,7 +340,7 @@ func (g *Games) ensureUserIsGameHost(client uint64, sessionid string, pin int) (
 				Message:    err.Error(),
 				Nextscreen: "entrance",
 			})
-			return common.Game{}, false
+			return nil, false
 		}
 
 		g.msghub.Send(messaging.SessionsTopic, common.ErrorToSessionMessage{
@@ -349,7 +349,7 @@ func (g *Games) ensureUserIsGameHost(client uint64, sessionid string, pin int) (
 			Nextscreen: "entrance",
 		})
 
-		return common.Game{}, false
+		return nil, false
 	}
 
 	if sessionid != game.Host {
@@ -358,7 +358,7 @@ func (g *Games) ensureUserIsGameHost(client uint64, sessionid string, pin int) (
 			Message:    "you are not the host of the game",
 			Nextscreen: "entrance",
 		})
-		return common.Game{}, false
+		return nil, false
 	}
 
 	return game, true
@@ -406,7 +406,7 @@ func (g *Games) processStartGameMessage(msg common.StartGameMessage) {
 		Nextscreen: "host-show-question",
 	})
 
-	g.sendGamePlayersToAnswerQuestionScreen(msg.Sessionid, game)
+	g.sendGamePlayersToAnswerQuestionScreen(msg.Sessionid, *game)
 }
 
 func (g *Games) processSetQuizForGameMessage(msg common.SetQuizForGameMessage) {
@@ -940,6 +940,12 @@ func (g *Games) setGameQuiz(pin int, quiz common.Quiz) {
 	game, err := g.getGamePointer(pin)
 	if err != nil {
 		return
+	}
+
+	if quiz.ShuffleAnswers {
+		for i, question := range quiz.Questions {
+			quiz.Questions[i] = question.ShuffleAnswers()
+		}
 	}
 
 	g.mutex.Lock()

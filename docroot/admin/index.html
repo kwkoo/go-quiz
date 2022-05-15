@@ -99,6 +99,10 @@
         <label class="commonTitle">Question Duration</label>
         <input v-model.number="quiz.questionDuration" type="number" />
       </div>
+      <div>
+        <label class="commonTitle">Shuffle Answers</label>
+        <input v-model="quiz.shuffleAnswers" type="checkbox" />
+      </div>
       <br><br>
       <!-- all questions -->
       <div v-for="(question, index) in quiz.questions">
