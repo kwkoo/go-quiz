@@ -73,7 +73,7 @@
           <template v-for="(session, index) in list.sessions" class="center">
             <tr>
               <td>{{ session.id }}</td>
-              <td>{{ session.client == null?'no':'yes' }}</td>
+              <td>{{ session.clientid == 0?'no':'yes' }}</td>
               <td>{{ session.screen }}</td>
               <td>{{ session.expiry }}</td>
               <td>{{ session.gamepin }}</td>
