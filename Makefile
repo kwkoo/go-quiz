@@ -4,7 +4,7 @@ BASE:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 COVERAGEOUTPUT=coverage.out
 COVERAGEHTML=coverage.html
 IMAGENAME="ghcr.io/kwkoo/$(PACKAGE)"
-VERSION="0.2"
+VERSION="0.3"
 ADMINPASSWORD="password"
 SESSIONTIMEOUT=300
 
@@ -34,6 +34,8 @@ coverage:
 image: 
 	docker build --rm -t $(IMAGENAME):$(VERSION) $(BASE)
 	docker push $(IMAGENAME):$(VERSION)
+	docker tag $(IMAGENAME):$(VERSION) $(IMAGENAME):latest
+	docker push $(IMAGENAME):latest
 
 runcontainer:
 	docker run \
