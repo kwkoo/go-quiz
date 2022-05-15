@@ -17,8 +17,13 @@ import (
 
 const reaperInterval = 60
 
+type webSocketRegistry interface {
+	DeregisterClientID(uint64)
+}
+
 type Sessions struct {
 	msghub         *messaging.MessageHub
+	wsRegistry     webSocketRegistry
 	mutex          sync.RWMutex
 	all            map[string]*common.Session
 	clientids      map[uint64]*common.Session
@@ -27,11 +32,12 @@ type Sessions struct {
 	sessionTimeout int
 }
 
-func InitSessions(msghub *messaging.MessageHub, engine *PersistenceEngine, auth *api.Auth, sessionTimeout int) *Sessions {
+func InitSessions(msghub *messaging.MessageHub, engine *PersistenceEngine, wsRegistry webSocketRegistry, auth *api.Auth, sessionTimeout int) *Sessions {
 	log.Printf("session timeout set to %d seconds", sessionTimeout)
 
 	sessions := Sessions{
 		msghub:         msghub,
+		wsRegistry:     wsRegistry,
 		all:            make(map[string]*common.Session),
 		clientids:      make(map[uint64]*common.Session),
 		engine:         engine,
@@ -569,7 +575,10 @@ func (s *Sessions) expireSessions() {
 	s.mutex.Lock()
 	for id, session := range s.all {
 		if now.After(session.Expiry) {
-			delete(s.all, id)
+			s.msghub.Send(messaging.SessionsTopic, common.DeleteSessionMessage{
+				Sessionid: id,
+			})
+			s.wsRegistry.DeregisterClientID(session.ClientId)
 			log.Printf("expiring session %s", id)
 		}
 	}

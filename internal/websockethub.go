@@ -20,9 +20,10 @@ import (
 type Hub struct {
 	// For generation of client IDs
 	nextclientid uint64
-	clientmux    sync.Mutex
+	clientidmux  sync.Mutex
 
 	// Registered clients.
+	clientmux sync.RWMutex
 	clients   map[*Client]bool
 	clientids map[uint64]*Client
 
@@ -69,8 +70,10 @@ func (h *Hub) Run(shutdownChan chan struct{}) {
 		case client := <-h.register:
 			clientid := h.generateClientID()
 			client.clientid = clientid
+			h.clientmux.Lock()
 			h.clients[client] = true
 			h.clientids[clientid] = client
+			h.clientmux.Unlock()
 
 		case client := <-h.unregister:
 			h.deregisterClient(client)
@@ -96,14 +99,31 @@ func (h *Hub) Run(shutdownChan chan struct{}) {
 	}
 }
 
+// called by session reaper
+func (h *Hub) DeregisterClientID(id uint64) {
+	h.clientmux.RLock()
+	client, ok := h.clientids[id]
+	h.clientmux.RUnlock()
+	if !ok {
+		return
+	}
+
+	h.deregisterClient(client)
+}
+
 func (h *Hub) deregisterClient(client *Client) {
 	if client == nil {
 		return
 	}
 
+	h.clientmux.Lock()
 	delete(h.clients, client)
 	delete(h.clientids, client.clientid)
-	close(client.send)
+	h.clientmux.Unlock()
+	if client.send != nil {
+		close(client.send)
+		client.send = nil
+	}
 
 	h.msghub.Send(messaging.SessionsTopic, common.DeregisterClientMessage{
 		Clientid: client.clientid,
@@ -111,7 +131,9 @@ func (h *Hub) deregisterClient(client *Client) {
 }
 
 func (h *Hub) processClientMessage(msg common.ClientMessage) {
+	h.clientmux.RLock()
 	c, ok := h.clientids[msg.Clientid]
+	h.clientmux.RUnlock()
 	if !ok {
 		return
 	}
@@ -120,7 +142,9 @@ func (h *Hub) processClientMessage(msg common.ClientMessage) {
 }
 
 func (h *Hub) processClientErrorMessage(msg common.ClientErrorMessage) {
+	h.clientmux.RLock()
 	c, ok := h.clientids[msg.Clientid]
+	h.clientmux.RUnlock()
 	if !ok {
 		return
 	}
@@ -166,8 +190,8 @@ func (h *Hub) errorMessageToClient(c *Client, message, nextscreen string) {
 }
 
 func (h *Hub) generateClientID() uint64 {
-	h.clientmux.Lock()
-	defer h.clientmux.Unlock()
+	h.clientidmux.Lock()
+	defer h.clientidmux.Unlock()
 
 	if h.nextclientid == math.MaxUint64 {
 		h.nextclientid = 0

@@ -81,24 +81,24 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	sessions := internal.InitSessions(mh, persistenceEngine, auth, config.SessionTimeout)
-	games := internal.InitGames(mh, persistenceEngine)
+
+	hub := internal.NewHub(mh, persistenceEngine)
+	go func(shutdownChan chan struct{}) {
+		hub.Run(shutdownChan)
+	}(shutdown.GetShutdownChan())
 
 	go func(shutdownChan chan struct{}) {
 		quizzes.Run(shutdownChan)
 	}(shutdown.GetShutdownChan())
 
+	sessions := internal.InitSessions(mh, persistenceEngine, hub, auth, config.SessionTimeout)
 	go func(shutdownChan chan struct{}) {
 		sessions.Run(shutdownChan)
 	}(shutdown.GetShutdownChan())
 
+	games := internal.InitGames(mh, persistenceEngine)
 	go func(shutdownChan chan struct{}) {
 		games.Run(shutdownChan)
-	}(shutdown.GetShutdownChan())
-
-	hub := internal.NewHub(mh, persistenceEngine)
-	go func(shutdownChan chan struct{}) {
-		hub.Run(shutdownChan)
 	}(shutdown.GetShutdownChan())
 
 	api := api.InitRestApi(mh)
