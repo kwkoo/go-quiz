@@ -14,7 +14,7 @@
             "env": {
                 "ADMINPASSWORD": "password",
                 "SESSIONTIMEOUT": "300",
-                "DOCROOT": "${workspaceFolder/docroot"
+                "DOCROOT": "${workspaceFolder}/docroot"
             },
             "showLog": true
         }
