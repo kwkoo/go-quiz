@@ -128,7 +128,7 @@ func (engine *PersistenceEngine) Delete(key string) {
 
 func (engine *PersistenceEngine) Incr(counterKey string) (int, error) {
 	if engine == nil {
-		return 0, errors.New("Redis not configured")
+		return 0, errors.New("redis not configured")
 	}
 	conn := engine.pool.Get()
 	defer conn.Close()
