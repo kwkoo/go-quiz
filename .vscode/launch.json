@@ -9,11 +9,13 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "${workspaceFolder}",
-            "args": [
-                "-docroot",
-                "${workspaceRoot}/docroot"
-            ],
+            "program": "${workspaceFolder}/main.go",
+            "args": [],
+            "env": {
+                "ADMINPASSWORD": "password",
+                "SESSIONTIMEOUT": "300",
+                "DOCROOT": "${workspaceFolder/docroot"
+            },
             "showLog": true
         }
     ]
