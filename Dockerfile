@@ -14,6 +14,9 @@ RUN \
 
 
 FROM scratch
+
+ARG PACKAGE
+
 LABEL \
   maintainer="kin.wai.koo@gmail.com" \
   io.k8s.description="Quiz web application" \
@@ -21,8 +24,6 @@ LABEL \
   io.openshift.expose-services="8080:http" \
   org.opencontainers.image.source="https://github.com/kwkoo/${PACKAGE}" \
   builder=false
-
-ARG PACKAGE
 
 COPY --from=builder /go/bin/${PACKAGE} /usr/local/bin/app
 
