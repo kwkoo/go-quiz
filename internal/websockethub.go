@@ -100,15 +100,22 @@ func (h *Hub) Run(shutdownChan chan struct{}) {
 }
 
 // called by session reaper
-func (h *Hub) DeregisterClientID(id uint64) {
-	h.clientmux.RLock()
-	client, ok := h.clientids[id]
-	h.clientmux.RUnlock()
-	if !ok {
-		return
-	}
+func (h *Hub) DeregisterClientID(ids []uint64) {
+	clients := []*Client{}
 
-	h.deregisterClient(client)
+	h.clientmux.RLock()
+	for _, id := range ids {
+		client, ok := h.clientids[id]
+		if !ok {
+			continue
+		}
+		clients = append(clients, client)
+	}
+	h.clientmux.RUnlock()
+
+	for _, client := range clients {
+		h.deregisterClient(client)
+	}
 }
 
 func (h *Hub) deregisterClient(client *Client) {

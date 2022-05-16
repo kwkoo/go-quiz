@@ -18,7 +18,7 @@ import (
 const reaperInterval = 60
 
 type webSocketRegistry interface {
-	DeregisterClientID(uint64)
+	DeregisterClientID([]uint64)
 }
 
 type Sessions struct {
@@ -571,18 +571,24 @@ func (s *Sessions) extendSessionExpiry(id string) {
 }
 
 func (s *Sessions) expireSessions() {
+	clientids := []uint64{}
 	now := time.Now()
-	s.mutex.Lock()
+	s.mutex.RLock()
 	for id, session := range s.all {
 		if now.After(session.Expiry) {
 			s.msghub.Send(messaging.SessionsTopic, common.DeleteSessionMessage{
 				Sessionid: id,
 			})
-			s.wsRegistry.DeregisterClientID(session.ClientId)
+			clientids = append(clientids, session.ClientId)
 			log.Printf("expiring session %s", id)
 		}
 	}
-	s.mutex.Unlock()
+	s.mutex.RUnlock()
+
+	if len(clientids) > 0 {
+		log.Printf("expiring %d session(s)", len(clientids))
+		s.wsRegistry.DeregisterClientID(clientids)
+	}
 }
 
 func (s *Sessions) persist(session *common.Session) {
