@@ -1,24 +1,34 @@
-FROM golang:1.17.7 as builder
-ARG PREFIX=github.com/kwkoo
-ARG PACKAGE=go-quiz
+FROM --platform=$BUILDPLATFORM docker.io/golang:1.17.7 as builder
+
+ARG PACKAGE
+
 LABEL builder=true
-LABEL org.opencontainers.image.source https://github.com/kwkoo/go-quiz
+
 COPY . /go/src/
 RUN \
   set -x \
   && \
   cd /go/src/ \
   && \
-  CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /go/bin/${PACKAGE}
+  GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 go build -a -installsuffix cgo -o /go/bin/${PACKAGE}
+
 
 FROM scratch
-LABEL maintainer="kin.wai.koo@gmail.com"
-LABEL builder=false
-COPY --from=builder /go/bin/${PACKAGE} /
+LABEL \
+  maintainer="kin.wai.koo@gmail.com" \
+  io.k8s.description="Quiz web application" \
+  org.opencontainers.image.description="Quiz web application" \
+  io.openshift.expose-services="8080:http" \
+  org.opencontainers.image.source="https://github.com/kwkoo/${PACKAGE}" \
+  builder=false
+
+ARG PACKAGE
+
+COPY --from=builder /go/bin/${PACKAGE} /usr/local/bin/app
 
 # we need to copy the certificates over because we're connecting over SSL
 COPY --from=builder /etc/ssl /etc/ssl
 
 EXPOSE 8080
 USER 1001
-ENTRYPOINT ["/go-quiz"]
+ENTRYPOINT ["/usr/local/bin/app"]

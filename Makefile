@@ -1,5 +1,6 @@
 PREFIX=github.com/kwkoo
 PACKAGE=go-quiz
+BUILDERNAME=$(PACKAGE)-builder
 BASE:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 COVERAGEOUTPUT=coverage.out
 COVERAGEHTML=coverage.html
@@ -7,6 +8,7 @@ IMAGENAME="ghcr.io/kwkoo/$(PACKAGE)"
 VERSION="0.3"
 ADMINPASSWORD="password"
 SESSIONTIMEOUT=300
+DOCKER=docker
 
 .PHONY: run build clean test coverage image runcontainer redis importquizzes importquizzesocp
 run:
@@ -32,10 +34,15 @@ coverage:
 	open $(BASE)/$(COVERAGEHTML)
 
 image: 
-	docker build --rm -t $(IMAGENAME):$(VERSION) $(BASE)
-	docker push $(IMAGENAME):$(VERSION)
-	docker tag $(IMAGENAME):$(VERSION) $(IMAGENAME):latest
-	docker push $(IMAGENAME):latest
+	$(DOCKER) buildx use $(BUILDERNAME) || $(DOCKER) buildx create --name $(BUILDERNAME) --use
+	$(DOCKER) buildx build \
+	  --push \
+	  --platform=linux/amd64,linux/arm64,linux/arm/v7 \
+	  --rm \
+	  --build-arg PACKAGE=$(PACKAGE) \
+	  -t $(IMAGENAME):$(VERSION) \
+	  -t $(IMAGENAME):latest \
+	  $(BASE)
 
 runcontainer:
 	docker run \
