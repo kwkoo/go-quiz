@@ -130,7 +130,12 @@
         <div v-for="(vote, index) in hostshowquestion.data.votes" class="square" v-bind:class="{option0: index==0, option1: index==1, option2: index==2, option3: index==3}" v-bind:style="{ height: (vote * 100 / hostshowquestion.data.totalplayers) + 'px' }"></div>
       </div>
 
+      <br/><br/>
+
       <div class="questionsubheader">{{ hostshowquestion.data.question }}</div>
+
+      <br/><br/>
+
       <div v-for="(answer, index) in hostshowquestion.data.answers">
         <div class="answer" v-bind:class="{option0: index==0, option1: index==1, option2: index==2, option3: index==3}">{{ answer }}</div>
         <br/>
@@ -156,18 +161,32 @@
         </div>
       </div>
 
-      <h2 class="questionsubheader">{{ hostshowresults.data.question }}</h2>
+      <br/><br/>
+
+      <div class="questionsubheader">{{ hostshowresults.data.question }}</div>
+
+      <br/><br/>
+
       <div v-for="(answer, index) in hostshowresults.data.answers">
-        <h3 v-bind:style="{ filter: (hostshowresults.data.correct == index ? 'none' : 'grayscale(95%)') }" class="answer" v-bind:class="{option0: index==0, option1: index==1, option2: index==2, option3: index==3}"><span v-if="hostshowresults.data.correct == index">&#10004 </span>{{ answer }}</h3>
+        <div v-bind:style="{ filter: (hostshowresults.data.correct == index ? 'none' : 'grayscale(95%)') }" class="answer" v-bind:class="{option0: index==0, option1: index==1, option2: index==2, option3: index==3}"><span v-if="hostshowresults.data.correct == index">&#10004 </span>{{ answer }}</div>
         <br/>
       </div>
+
+      <br/><br/>
+
       <button class="buttonauth" :disabled="hostshowresults.disabled" v-on:click="hostNextQuestion">Next Question</button>
     </div>
 
 
     <div v-show="screen === 'host-show-game-results'">
       <div class="winnertitle">Top Players</div>
+
+      <br/><br/>
+
       <div class="winner" v-for="(p, index) in hostshowgameresults.data">{{ index + 1 }}. {{ p.name }} - {{ p.score }}</div>
+
+      <br/><br/>
+
       <div class="center">
         <button class="buttonauth" :disabled="hostshowgameresults.disabled" v-on:click="saveWinners">Export Winners</button>
         <button class="buttonauth" :disabled="hostshowgameresults.disabled" v-on:click="deleteGame">Delete Game</button>
@@ -177,6 +196,9 @@
 
     <div v-show="screen === 'error'">
       <div class="subtitle">{{ error.message }}</div>
+
+      <br/><br/>
+
       <button ref="errorok" class="button" :disabled="error.disabled" v-show="(error.next != null) && (error.next.length > 0)" v-on:click="dismissError">OK</button>
     </div>
 
