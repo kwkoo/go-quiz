@@ -12,7 +12,10 @@ DOCKER=docker
 
 .PHONY: run build clean test coverage image runcontainer redis importquizzes importquizzesocp
 run:
-	@ADMINPASSWORD="$(ADMINPASSWORD)" SESSIONTIMEOUT=$(SESSIONTIMEOUT) go run main.go -docroot $(BASE)/docroot
+	@ADMINPASSWORD=$(ADMINPASSWORD) SESSIONTIMEOUT=$(SESSIONTIMEOUT) go run main.go -docroot $(BASE)/docroot
+
+short-sessions:
+	@ADMINPASSWORD=$(ADMINPASSWORD) SESSIONTIMEOUT=30 REAPERINTERVAL=15 go run main.go -docroot $(BASE)/docroot
 
 build:
 	@echo "Building..."

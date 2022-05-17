@@ -36,6 +36,7 @@ func main() {
 		AdminUser      string `default:"admin" usage:"Admin username"`
 		AdminPassword  string `usage:"Admin password"`
 		SessionTimeout int    `default:"900" usage:"Timeout in seconds both for in-memory sessions and sessions in the persistent store"`
+		ReaperInterval int    `default:"60" usage:"Number of seconds between invocations of session reaper"`
 	}{}
 	if err := configparser.Parse(&config); err != nil {
 		log.Fatal(err)
@@ -91,7 +92,7 @@ func main() {
 		quizzes.Run(shutdownChan)
 	}(shutdown.GetShutdownChan())
 
-	sessions := internal.InitSessions(mh, persistenceEngine, hub, auth, config.SessionTimeout)
+	sessions := internal.InitSessions(mh, persistenceEngine, hub, auth, config.SessionTimeout, config.ReaperInterval)
 	go func(shutdownChan chan struct{}) {
 		sessions.Run(shutdownChan)
 	}(shutdown.GetShutdownChan())

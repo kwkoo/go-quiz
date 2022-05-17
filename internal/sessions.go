@@ -15,8 +15,6 @@ import (
 	"github.com/kwkoo/go-quiz/internal/shutdown"
 )
 
-const reaperInterval = 60
-
 type webSocketRegistry interface {
 	DeregisterClientID([]uint64)
 }
@@ -32,7 +30,7 @@ type Sessions struct {
 	sessionTimeout int
 }
 
-func InitSessions(msghub *messaging.MessageHub, engine *PersistenceEngine, wsRegistry webSocketRegistry, auth *api.Auth, sessionTimeout int) *Sessions {
+func InitSessions(msghub *messaging.MessageHub, engine *PersistenceEngine, wsRegistry webSocketRegistry, auth *api.Auth, sessionTimeout int, reaperInterval int) *Sessions {
 	log.Printf("session timeout set to %d seconds", sessionTimeout)
 
 	sessions := Sessions{
@@ -59,8 +57,9 @@ func InitSessions(msghub *messaging.MessageHub, engine *PersistenceEngine, wsReg
 
 	// session reaper
 	go func() {
+		log.Printf("session reaper will run every %d seconds", reaperInterval)
 		shutdownChan := shutdown.GetShutdownChan()
-		timeout := time.After(reaperInterval * time.Second)
+		timeout := time.After(time.Duration(reaperInterval) * time.Second)
 		for {
 			select {
 			case <-shutdownChan:
@@ -70,7 +69,7 @@ func InitSessions(msghub *messaging.MessageHub, engine *PersistenceEngine, wsReg
 			case <-timeout:
 				log.Print("running session reaper")
 				sessions.expireSessions()
-				timeout = time.After(reaperInterval * time.Second)
+				timeout = time.After(time.Duration(reaperInterval) * time.Second)
 			default:
 				time.Sleep(3 * time.Second)
 			}
@@ -143,12 +142,16 @@ func (s *Sessions) processGetSessionsMessage(msg *common.GetSessionsMessage) {
 
 func (s *Sessions) processDeregisterClientMessage(msg common.DeregisterClientMessage) {
 	log.Printf("session deregister client %d", msg.Clientid)
+	s.mutex.RLock()
 	session, ok := s.clientids[msg.Clientid]
+	s.mutex.RUnlock()
 	if ok {
 		s.updateClientIDForSession(session.Id, 0)
 	}
 
+	s.mutex.Lock()
 	delete(s.clientids, msg.Clientid)
+	s.mutex.Unlock()
 }
 
 func (s *Sessions) processDeleteSessionMessage(msg common.DeleteSessionMessage) {
@@ -156,7 +159,9 @@ func (s *Sessions) processDeleteSessionMessage(msg common.DeleteSessionMessage) 
 	if session == nil {
 		return
 	}
+	s.mutex.Lock()
 	delete(s.clientids, session.ClientId)
+	s.mutex.Unlock()
 	s.deleteSession(msg.Sessionid)
 }
 
@@ -271,7 +276,9 @@ func (s *Sessions) processExtendSessionExpiryMessage(msg common.ExtendSessionExp
 }
 
 func (s *Sessions) processClientCommand(m *ClientCommand) {
+	s.mutex.RLock()
 	session, ok := s.clientids[m.client]
+	s.mutex.RUnlock()
 	if !ok {
 		// client hasn't identified themselves yet
 		if m.cmd == "session" {
@@ -656,9 +663,7 @@ func (s *Sessions) updateClientIDForSession(id string, newclientid uint64) {
 		delete(s.clientids, oldclientid)
 	}
 	session.ClientId = newclientid
-	if newclientid == 0 {
-		delete(s.clientids, newclientid)
-	} else {
+	if newclientid != 0 {
 		s.clientids[newclientid] = session
 	}
 	s.mutex.Unlock()
