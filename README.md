@@ -2,9 +2,31 @@
 
 A Kahoot clone with a UI based on [Ethan Brimhall's kahoot-clone-nodejs](https://github.com/ethanbrimhall/kahoot-clone-nodejs).
 
-Deploy this on OpenShift using `yaml/openshift.yaml`.
+To deploy this on OpenShift
 
-The admin credentials are stored in the `quiz` secret.
+	NAMESPACE=quiz \
+	PASSWORD=mysecretpassword \
+	helm upgrade \
+	  --install quiz go-quiz \
+	  --repo https://kwkoo.github.io/go-quiz \
+	  --namespace $NAMESPACE \
+	  --create-namespace \
+	  --set openshift=true \
+	  --set quiz.adminPassword=$PASSWORD
+
+To depoy this on non-OpenShift Kubernetes
+
+	NAMESPACE=quiz \
+	PASSWORD=mysecretpassword \
+	INGRESSHOST=quiz.apps.kubecluster.com \
+	helm upgrade \
+	  --install quiz go-quiz \
+	  --repo https://kwkoo.github.io/go-quiz \
+	  --namespace $NAMESPACE \
+	  --create-namespace \
+	  --set openshift=false \
+	  --set quiz.adminPassword=$PASSWORD \
+	  --set ingress.host=$INGRESSHOST
 
 To access the admin interface, go to the `/admin` endpoint.
 

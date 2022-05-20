@@ -9,8 +9,11 @@ VERSION="0.3"
 ADMINPASSWORD="password"
 SESSIONTIMEOUT=300
 DOCKER=docker
+NAMESPACE=quiz
+INGRESSHOST=quiz.apps.kubecluster.com
 
-.PHONY: run build clean test coverage image runcontainer redis importquizzes importquizzesocp
+.PHONY: run build clean test coverage image runcontainer redis importquizzes importquizzesocp helm-install-k8s helm-install-openshift helm-uninstall
+
 run:
 	@ADMINPASSWORD=$(ADMINPASSWORD) SESSIONTIMEOUT=$(SESSIONTIMEOUT) go run main.go -docroot $(BASE)/docroot
 
@@ -69,7 +72,33 @@ importquizzes:
 	@curl -XPUT -u admin:$(ADMINPASSWORD) -d @$(BASE)/quizzes.json http://localhost:8080/api/quiz/bulk
 
 importquizzesocp:
-	@curl -XPUT -u admin:myquizpassword -d @$(BASE)/quizzes.json https://`oc get route/quiz -o jsonpath='{.spec.host}'`/api/quiz/bulk
+	@curl -XPUT -u admin:$(ADMINPASSWORD) -d @$(BASE)/quizzes.json https://`oc get route/quiz-go-quiz -o jsonpath='{.spec.host}'`/api/quiz/bulk
 
 importquizzesk8s:
-	@curl -XPUT -u admin:myquizpassword -d @$(BASE)/quizzes.json http://`minikube ip`:30080/api/quiz/bulk
+	@curl -XPUT -u admin:$(ADMINPASSWORD) -d @$(BASE)/quizzes.json http://$(INGRESSHOST)/api/quiz/bulk
+
+# The helm chart is stored in /docs. It was packaged with the following:
+# helm package .
+#
+# index.yaml was created by running:
+# helm repo index .
+#
+helm-install-k8s:
+	helm upgrade \
+	  --install quiz $(BASE)/docs/go-quiz-0.1.0.tgz \
+	  --namespace $(NAMESPACE) \
+	  --create-namespace \
+	  --set openshift=false \
+	  --set quiz.adminPassword=$(ADMINPASSWORD) \
+	  --set ingress.host=$(INGRESSHOST)
+
+helm-install-openshift:
+	helm upgrade \
+	  --install quiz $(BASE)/docs/go-quiz-0.1.0.tgz \
+	  --namespace $(NAMESPACE) \
+	  --create-namespace \
+	  --set openshift=true \
+	  --set quiz.adminPassword=$(ADMINPASSWORD)
+
+helm-uninstall:
+	helm uninstall quiz --namespace $(NAMESPACE)
