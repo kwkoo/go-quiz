@@ -43,7 +43,7 @@ image:
 	$(DOCKER) buildx use $(BUILDERNAME) || $(DOCKER) buildx create --name $(BUILDERNAME) --use
 	$(DOCKER) buildx build \
 	  --push \
-	  --platform=linux/amd64,linux/arm64,linux/arm/v7 \
+	  --platform=linux/amd64,linux/arm64/v8,linux/arm/v7 \
 	  --rm \
 	  --build-arg PACKAGE=$(PACKAGE) \
 	  -t $(IMAGENAME):$(VERSION) \

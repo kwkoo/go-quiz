@@ -9,12 +9,13 @@ import (
 )
 
 var (
-	wg  sync.WaitGroup
-	ctx context.Context
+	wg   sync.WaitGroup
+	ctx  context.Context
+	stop context.CancelFunc
 )
 
 func InitShutdownHandler() {
-	ctx, _ = signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop = signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 }
 
 func Context() context.Context {
@@ -28,4 +29,5 @@ func NotifyShutdownComplete() {
 
 func WaitForShutdown() {
 	wg.Wait()
+	stop()
 }

@@ -98,6 +98,9 @@ func main() {
 	go func(ctx context.Context) {
 		sessions.Run(ctx, shutdown.NotifyShutdownComplete)
 	}(shutdown.Context())
+	go func(ctx context.Context) {
+		sessions.RunSessionReaper(ctx, shutdown.NotifyShutdownComplete)
+	}(shutdown.Context())
 
 	games := internal.InitGames(mh, persistenceEngine)
 	go func(ctx context.Context) {

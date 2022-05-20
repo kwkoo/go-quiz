@@ -60,26 +60,24 @@ func InitSessions(msghub *messaging.MessageHub, engine *PersistenceEngine, wsReg
 	return &sessions
 }
 
-func (s *Sessions) Run(ctx context.Context, shutdownComplete func()) {
-
-	// session reaper
-	go func() {
-		log.Printf("session reaper will run every %d seconds", s.reaperInterval)
-		timeout := time.After(time.Duration(s.reaperInterval) * time.Second)
-		for {
-			select {
-			case <-ctx.Done():
-				log.Printf("shutting down session reaper")
-				shutdownComplete()
-				return
-			case <-timeout:
-				log.Print("running session reaper")
-				s.expireSessions()
-				timeout = time.After(time.Duration(s.reaperInterval) * time.Second)
-			}
+func (s *Sessions) RunSessionReaper(ctx context.Context, shutdownComplete func()) {
+	log.Printf("session reaper will run every %d seconds", s.reaperInterval)
+	timeout := time.After(time.Duration(s.reaperInterval) * time.Second)
+	for {
+		select {
+		case <-ctx.Done():
+			log.Print("shutting down session reaper")
+			shutdownComplete()
+			return
+		case <-timeout:
+			log.Print("running session reaper")
+			s.expireSessions()
+			timeout = time.After(time.Duration(s.reaperInterval) * time.Second)
 		}
-	}()
+	}
+}
 
+func (s *Sessions) Run(ctx context.Context, shutdownComplete func()) {
 	fromClients := s.msghub.GetTopic(messaging.IncomingMessageTopic)
 	sessionsHub := s.msghub.GetTopic(messaging.SessionsTopic)
 
