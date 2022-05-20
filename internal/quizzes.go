@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/kwkoo/go-quiz/internal/common"
 	"github.com/kwkoo/go-quiz/internal/messaging"
-	"github.com/kwkoo/go-quiz/internal/shutdown"
 )
 
 type Quizzes struct {
@@ -51,13 +51,13 @@ func InitQuizzes(msghub *messaging.MessageHub, engine *PersistenceEngine) (*Quiz
 	}, nil
 }
 
-func (q *Quizzes) Run(shutdownChan chan struct{}) {
+func (q *Quizzes) Run(ctx context.Context, shutdownComplete func()) {
 	topic := q.msghub.GetTopic(messaging.QuizzesTopic)
 	for {
 		select {
-		case <-shutdownChan:
+		case <-ctx.Done():
 			log.Print("shutting down quiz handler")
-			shutdown.NotifyShutdownComplete()
+			shutdownComplete()
 			return
 		case msg, ok := <-topic:
 			if !ok {

@@ -1,7 +1,7 @@
 package shutdown
 
 import (
-	"log"
+	"context"
 	"os"
 	"os/signal"
 	"sync"
@@ -9,21 +9,17 @@ import (
 )
 
 var (
-	wg           sync.WaitGroup
-	shutdownChan chan struct{}
-	signalChan   chan os.Signal
+	wg  sync.WaitGroup
+	ctx context.Context
 )
 
 func InitShutdownHandler() {
-	shutdownChan = make(chan struct{})
-	signalChan = make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
-	signal.Notify(signalChan, syscall.SIGTERM)
+	ctx, _ = signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 }
 
-func GetShutdownChan() chan struct{} {
+func Context() context.Context {
 	wg.Add(1)
-	return shutdownChan
+	return ctx
 }
 
 func NotifyShutdownComplete() {
@@ -31,10 +27,5 @@ func NotifyShutdownComplete() {
 }
 
 func WaitForShutdown() {
-	<-signalChan
-	log.Print("received signal - shutting down gracefully...")
-
-	// we received a signal - proceed to call all registered listeners
-	close(shutdownChan)
 	wg.Wait()
 }

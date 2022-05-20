@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -12,7 +13,6 @@ import (
 	"github.com/kwkoo/go-quiz/internal/api"
 	"github.com/kwkoo/go-quiz/internal/common"
 	"github.com/kwkoo/go-quiz/internal/messaging"
-	"github.com/kwkoo/go-quiz/internal/shutdown"
 )
 
 type webSocketRegistry interface {
@@ -28,6 +28,7 @@ type Sessions struct {
 	engine         *PersistenceEngine
 	auth           *api.Auth
 	sessionTimeout int
+	reaperInterval int
 }
 
 func InitSessions(msghub *messaging.MessageHub, engine *PersistenceEngine, wsRegistry webSocketRegistry, auth *api.Auth, sessionTimeout int, reaperInterval int) *Sessions {
@@ -41,6 +42,7 @@ func InitSessions(msghub *messaging.MessageHub, engine *PersistenceEngine, wsReg
 		engine:         engine,
 		auth:           auth,
 		sessionTimeout: sessionTimeout,
+		reaperInterval: reaperInterval,
 	}
 
 	keys, err := engine.GetKeys("session")
@@ -55,31 +57,29 @@ func InitSessions(msghub *messaging.MessageHub, engine *PersistenceEngine, wsReg
 		sessions.updateClientIDForSession(key, 0)
 	}
 
+	return &sessions
+}
+
+func (s *Sessions) Run(ctx context.Context, shutdownComplete func()) {
+
 	// session reaper
 	go func() {
-		log.Printf("session reaper will run every %d seconds", reaperInterval)
-		shutdownChan := shutdown.GetShutdownChan()
-		timeout := time.After(time.Duration(reaperInterval) * time.Second)
+		log.Printf("session reaper will run every %d seconds", s.reaperInterval)
+		timeout := time.After(time.Duration(s.reaperInterval) * time.Second)
 		for {
 			select {
-			case <-shutdownChan:
+			case <-ctx.Done():
 				log.Printf("shutting down session reaper")
-				shutdown.NotifyShutdownComplete()
+				shutdownComplete()
 				return
 			case <-timeout:
 				log.Print("running session reaper")
-				sessions.expireSessions()
-				timeout = time.After(time.Duration(reaperInterval) * time.Second)
-			default:
-				time.Sleep(3 * time.Second)
+				s.expireSessions()
+				timeout = time.After(time.Duration(s.reaperInterval) * time.Second)
 			}
 		}
 	}()
 
-	return &sessions
-}
-
-func (s *Sessions) Run(shutdownChan chan struct{}) {
 	fromClients := s.msghub.GetTopic(messaging.IncomingMessageTopic)
 	sessionsHub := s.msghub.GetTopic(messaging.SessionsTopic)
 
@@ -127,9 +127,9 @@ func (s *Sessions) Run(shutdownChan chan struct{}) {
 			default:
 				log.Printf("unrecognized message type %T received on %s topic", msg, messaging.SessionsTopic)
 			}
-		case <-shutdownChan:
+		case <-ctx.Done():
 			log.Print("shutting down sessions handler")
-			shutdown.NotifyShutdownComplete()
+			shutdownComplete()
 			return
 		}
 	}

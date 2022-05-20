@@ -6,13 +6,13 @@
 package internal
 
 import (
+	"context"
 	"log"
 	"math"
 	"sync"
 
 	"github.com/kwkoo/go-quiz/internal/common"
 	"github.com/kwkoo/go-quiz/internal/messaging"
-	"github.com/kwkoo/go-quiz/internal/shutdown"
 )
 
 // Hub maintains the set of active clients and broadcasts messages to the
@@ -57,14 +57,14 @@ func (h *Hub) ClosePersistenceEngine() {
 	h.persistenceengine.Close()
 }
 
-func (h *Hub) Run(shutdownChan chan struct{}) {
+func (h *Hub) Run(ctx context.Context, shutdownComplete func()) {
 	clientHub := h.msghub.GetTopic(messaging.ClientHubTopic)
 
 	for {
 		select {
-		case <-shutdownChan:
+		case <-ctx.Done():
 			log.Print("websockethub received shutdown signal, exiting")
-			shutdown.NotifyShutdownComplete()
+			shutdownComplete()
 			return
 
 		case client := <-h.register:

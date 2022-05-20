@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"crypto/rand"
 	"errors"
 	"fmt"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/kwkoo/go-quiz/internal/common"
 	"github.com/kwkoo/go-quiz/internal/messaging"
-	"github.com/kwkoo/go-quiz/internal/shutdown"
 )
 
 type Games struct {
@@ -54,7 +54,7 @@ func InitGames(msghub *messaging.MessageHub, engine *PersistenceEngine) *Games {
 	return &games
 }
 
-func (g *Games) Run(shutdownChan chan struct{}) {
+func (g *Games) Run(ctx context.Context, shutdownComplete func()) {
 	gamesHub := g.msghub.GetTopic(messaging.GamesTopic)
 
 	for {
@@ -108,9 +108,9 @@ func (g *Games) Run(shutdownChan chan struct{}) {
 				log.Printf("unrecognized message type %T received on %s topic", msg, messaging.GamesTopic)
 			}
 
-		case <-shutdownChan:
+		case <-ctx.Done():
 			log.Print("shutting down games handler")
-			shutdown.NotifyShutdownComplete()
+			shutdownComplete()
 			return
 		}
 	}

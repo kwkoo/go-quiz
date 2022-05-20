@@ -86,23 +86,23 @@ func main() {
 	}
 
 	hub := internal.NewHub(mh, persistenceEngine)
-	go func(shutdownChan chan struct{}) {
-		hub.Run(shutdownChan)
-	}(shutdown.GetShutdownChan())
+	go func(ctx context.Context) {
+		hub.Run(ctx, shutdown.NotifyShutdownComplete)
+	}(shutdown.Context())
 
-	go func(shutdownChan chan struct{}) {
-		quizzes.Run(shutdownChan)
-	}(shutdown.GetShutdownChan())
+	go func(ctx context.Context) {
+		quizzes.Run(ctx, shutdown.NotifyShutdownComplete)
+	}(shutdown.Context())
 
 	sessions := internal.InitSessions(mh, persistenceEngine, hub, auth, config.SessionTimeout, config.ReaperInterval)
-	go func(shutdownChan chan struct{}) {
-		sessions.Run(shutdownChan)
-	}(shutdown.GetShutdownChan())
+	go func(ctx context.Context) {
+		sessions.Run(ctx, shutdown.NotifyShutdownComplete)
+	}(shutdown.Context())
 
 	games := internal.InitGames(mh, persistenceEngine)
-	go func(shutdownChan chan struct{}) {
-		games.Run(shutdownChan)
-	}(shutdown.GetShutdownChan())
+	go func(ctx context.Context) {
+		games.Run(ctx, shutdown.NotifyShutdownComplete)
+	}(shutdown.Context())
 
 	api := api.InitRestApi(mh)
 	http.HandleFunc("/api/", auth.BasicAuth(api.ServeHTTP))
@@ -127,13 +127,13 @@ func main() {
 		}
 	}()
 
-	go func() {
-		<-shutdown.GetShutdownChan()
+	go func(ctx context.Context) {
+		<-ctx.Done()
 		log.Print("interrupt signal received, initiating web server shutdown...")
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		server.Shutdown(ctx)
-	}()
+	}(shutdown.Context())
 
 	shutdown.WaitForShutdown()
 	mh.Close()
