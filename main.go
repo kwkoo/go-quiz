@@ -45,6 +45,13 @@ func main() {
 	// initialize random number generator - used for shuffling answers
 	rand.Seed(time.Now().UnixNano())
 
+	var persistenceEngine *internal.PersistenceEngine
+	if len(config.RedisHost) > 0 {
+		log.Printf("will use Redis at %s as the persistent store", config.RedisHost)
+		persistenceEngine = internal.InitRedis(config.RedisHost, config.RedisPassword)
+		persistenceEngine.WaitForRedis()
+	}
+
 	shutdown.InitShutdownHandler()
 
 	var filesystem http.FileSystem
@@ -73,11 +80,6 @@ func main() {
 	http.HandleFunc("/", cookieGen.ServeHTTP)
 
 	mh := messaging.InitMessageHub()
-
-	var persistenceEngine *internal.PersistenceEngine
-	if len(config.RedisHost) > 0 {
-		persistenceEngine = internal.InitRedis(config.RedisHost, config.RedisPassword)
-	}
 	quizzes, err := internal.InitQuizzes(mh, persistenceEngine)
 	if err != nil {
 		log.Fatal(err)

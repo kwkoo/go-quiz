@@ -48,6 +48,23 @@ func InitRedis(redisHost, redisPassword string) *PersistenceEngine {
 	return &PersistenceEngine{pool: &pool}
 }
 
+// wait for Redis to come up
+func (engine *PersistenceEngine) WaitForRedis() {
+	if engine == nil {
+		return
+	}
+
+	for {
+		conn := engine.pool.Get()
+		if conn.Err() == nil {
+			conn.Close()
+			return
+		}
+		log.Print("could not get connection to Redis, sleeping...")
+		time.Sleep(5 * time.Second)
+	}
+}
+
 func (engine *PersistenceEngine) Close() {
 	if engine == nil {
 		return
