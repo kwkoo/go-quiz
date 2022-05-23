@@ -8,7 +8,7 @@ To deploy this on OpenShift
 	PASSWORD=mysecretpassword \
 	helm upgrade \
 	  --install quiz go-quiz \
-	  --repo https://kwkoo.github.io/go-quiz \
+	  --repo https://kwkoo.github.io/go-quiz/helm \
 	  --namespace $NAMESPACE \
 	  --create-namespace \
 	  --set openshift=true \
@@ -21,7 +21,7 @@ To depoy this on non-OpenShift Kubernetes
 	INGRESSHOST=quiz.apps.kubecluster.com \
 	helm upgrade \
 	  --install quiz go-quiz \
-	  --repo https://kwkoo.github.io/go-quiz \
+	  --repo https://kwkoo.github.io/go-quiz/helm \
 	  --namespace $NAMESPACE \
 	  --create-namespace \
 	  --set openshift=false \

@@ -77,7 +77,7 @@ importquizzesocp:
 importquizzesk8s:
 	@curl -XPUT -u admin:$(ADMINPASSWORD) -d @$(BASE)/quizzes.json http://$(INGRESSHOST)/api/quiz/bulk
 
-# The helm chart is stored in /docs. It was packaged with the following:
+# The helm chart is stored in /helm. It was packaged with the following:
 # helm package .
 #
 # index.yaml was created by running:
@@ -85,7 +85,7 @@ importquizzesk8s:
 #
 helm-install-k8s:
 	helm upgrade \
-	  --install quiz $(BASE)/docs/go-quiz-0.1.0.tgz \
+	  --install quiz $(BASE)/helm/go-quiz-0.1.0.tgz \
 	  --namespace $(NAMESPACE) \
 	  --create-namespace \
 	  --set openshift=false \
@@ -94,7 +94,7 @@ helm-install-k8s:
 
 helm-install-openshift:
 	helm upgrade \
-	  --install quiz $(BASE)/docs/go-quiz-0.1.0.tgz \
+	  --install quiz $(BASE)/helm/go-quiz-0.1.0.tgz \
 	  --namespace $(NAMESPACE) \
 	  --create-namespace \
 	  --set openshift=true \
