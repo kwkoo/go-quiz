@@ -1,0 +1,10 @@
+# Add the helm repo to the OpenShift Console
+#
+apiVersion: helm.openshift.io/v1beta1
+kind: HelmChartRepository
+metadata:
+  name: quiz-repo
+spec:
+  name: quiz-repo
+  connectionConfig:
+    url: https://kwkoo.github.io/go-quiz/helm
