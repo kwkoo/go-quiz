@@ -950,6 +950,10 @@ func (g *Games) setGameQuiz(pin int, quiz common.Quiz) {
 		return
 	}
 
+	if quiz.ShuffleQuestions {
+		quiz.Shuffle()
+	}
+
 	if quiz.ShuffleAnswers {
 		for i, question := range quiz.Questions {
 			quiz.Questions[i] = question.ShuffleAnswers()

@@ -8,6 +8,7 @@ var app = new Vue({
         quiz: {
             name: '',
             questionDuration: 20,
+            shuffleQuestions: false,
             shuffleAnswers: false,
             questions: [
                 {

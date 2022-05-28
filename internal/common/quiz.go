@@ -49,8 +49,25 @@ type Quiz struct {
 	Id               int            `json:"id"`
 	Name             string         `json:"name"`
 	QuestionDuration int            `json:"questionDuration"`
+	ShuffleQuestions bool           `json:"shuffleQuestions"`
 	ShuffleAnswers   bool           `json:"shuffleAnswers"`
 	Questions        []QuizQuestion `json:"questions"`
+}
+
+// Shuffle questions
+func (q *Quiz) Shuffle() {
+	questions := make([]QuizQuestion, len(q.Questions))
+	copy(questions, q.Questions)
+
+	shuffled := []QuizQuestion{}
+
+	for len(questions) > 0 {
+		selected := rand.Intn(len(questions))
+		shuffled = append(shuffled, questions[selected])
+		questions = append(questions[:selected], questions[selected+1:]...)
+	}
+
+	q.Questions = shuffled
 }
 
 func (q Quiz) NumQuestions() int {
