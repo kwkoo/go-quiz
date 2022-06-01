@@ -6,27 +6,29 @@ To deploy this on OpenShift
 
 	NAMESPACE=quiz \
 	PASSWORD=mysecretpassword \
-	helm upgrade \
+	bash -c \
+	'helm upgrade \
 	  --install quiz go-quiz \
 	  --repo https://kwkoo.github.io/go-quiz/helm \
 	  --namespace $NAMESPACE \
 	  --create-namespace \
 	  --set openshift=true \
-	  --set quiz.adminPassword=$PASSWORD
+	  --set quiz.adminPassword=$PASSWORD'
 
 To depoy this on non-OpenShift Kubernetes
 
 	NAMESPACE=quiz \
 	PASSWORD=mysecretpassword \
 	INGRESSHOST=quiz.apps.kubecluster.com \
-	helm upgrade \
+	bash -c \
+	'helm upgrade \
 	  --install quiz go-quiz \
 	  --repo https://kwkoo.github.io/go-quiz/helm \
 	  --namespace $NAMESPACE \
 	  --create-namespace \
 	  --set openshift=false \
 	  --set quiz.adminPassword=$PASSWORD \
-	  --set ingress.host=$INGRESSHOST
+	  --set ingress.host=$INGRESSHOST'
 
 To access the admin interface, go to the `/admin` endpoint.
 
