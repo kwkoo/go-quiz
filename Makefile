@@ -12,7 +12,7 @@ DOCKER=docker
 NAMESPACE=quiz
 INGRESSHOST=quiz.apps.kubecluster.com
 
-.PHONY: run build clean test coverage image runcontainer redis importquizzes importquizzesocp helm-install-k8s helm-install-openshift helm-uninstall
+.PHONY: run build clean test coverage image runcontainer redis importquizzes importquizzesocp helm helm-install-k8s helm-install-openshift helm-uninstall
 
 run:
 	@ADMINPASSWORD=$(ADMINPASSWORD) SESSIONTIMEOUT=$(SESSIONTIMEOUT) go run $(BASE) -docroot $(BASE)/docroot
@@ -83,6 +83,10 @@ importquizzesk8s:
 # index.yaml was created by running:
 # helm repo index .
 #
+helm:
+	cd $(BASE)/helm && helm package go-quiz
+	cd $(BASE)/helm && helm repo index .
+
 helm-install-k8s:
 	helm upgrade \
 	  --install quiz $(BASE)/helm/go-quiz-0.1.0.tgz \
