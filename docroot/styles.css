@@ -201,8 +201,9 @@ a {
 }
 
 .option3 {
-    background-color: #ffc800;
+    background-color: #fff100;
     background-image: url('./images/3.svg');
+    color: black;
 }
 
 .winnertitle {
