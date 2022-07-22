@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM docker.io/golang:1.17.7 as builder
+FROM --platform=$BUILDPLATFORM docker.io/golang:1.18.4 as builder
 
 ARG PACKAGE
 
