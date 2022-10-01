@@ -251,6 +251,7 @@ func (g *Game) AddPlayer(sessionid, name string) bool {
 	return true
 }
 
+// name should be trimmed of leading and trailing spaces
 func (g *Game) NameExistsInGame(name string) bool {
 	lowerName := strings.ToLower(name)
 	for _, v := range g.PlayerNames {

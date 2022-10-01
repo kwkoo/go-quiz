@@ -22,3 +22,31 @@ func TestCalculateScore(t *testing.T) {
 		}
 	}
 }
+
+func TestNameExistsInGame(t *testing.T) {
+	tests := []struct {
+		playerNames      []string
+		newPlayer        string
+		expectedResponse bool
+	}{
+		{[]string{"abc"}, "ABC", true}, // case-sensitivity
+		{[]string{"abc"}, "abc", true},
+		{[]string{"abc"}, "abcd", false},
+	}
+
+	game := Game{}
+
+	for testIndex, test := range tests {
+		m := make(map[string]string)
+		for _, p := range test.playerNames {
+			m[p] = p
+		}
+		game.PlayerNames = m
+
+		response := game.NameExistsInGame(test.newPlayer)
+		if response != test.expectedResponse {
+			t.Errorf("expected a response of %v but got %v instead for test index %d", test.expectedResponse, response, testIndex)
+		}
+	}
+
+}
