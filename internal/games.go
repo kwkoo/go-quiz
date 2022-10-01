@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/kwkoo/go-quiz/internal/common"
@@ -935,8 +936,13 @@ func (g *Games) addPlayerToGame(msg common.AddPlayerToGameMessage) error {
 		return errors.New("game is not accepting new players")
 	}
 
+	name := strings.TrimSpace(msg.Name)
 	g.mutex.Lock()
-	changed := game.AddPlayer(msg.Sessionid, msg.Name)
+	if game.NameExistsInGame(name) {
+		g.mutex.Unlock()
+		return common.NewNameExistsInGameError(name, msg.Pin)
+	}
+	changed := game.AddPlayer(msg.Sessionid, name)
 	g.mutex.Unlock()
 	if changed {
 		g.persist(game)

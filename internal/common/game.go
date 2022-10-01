@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -59,6 +60,22 @@ func (e *NoSuchGameError) Error() string {
 func NewNoSuchGameError(pin int) *NoSuchGameError {
 	return &NoSuchGameError{
 		Pin: pin,
+	}
+}
+
+type NameExistsInGameError struct {
+	Pin  int
+	Name string
+}
+
+func (e *NameExistsInGameError) Error() string {
+	return fmt.Sprintf("%s already exists in game %d", e.Name, e.Pin)
+}
+
+func NewNameExistsInGameError(name string, pin int) *NameExistsInGameError {
+	return &NameExistsInGameError{
+		Pin:  pin,
+		Name: name,
 	}
 }
 
@@ -232,6 +249,16 @@ func (g *Game) AddPlayer(sessionid, name string) bool {
 	g.Players[sessionid] = 0
 	g.PlayerNames[sessionid] = name
 	return true
+}
+
+func (g *Game) NameExistsInGame(name string) bool {
+	lowerName := strings.ToLower(name)
+	for _, v := range g.PlayerNames {
+		if lowerName == strings.ToLower(v) {
+			return true
+		}
+	}
+	return false
 }
 
 func (g *Game) SetQuiz(quiz Quiz) {

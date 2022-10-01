@@ -31,3 +31,7 @@ func WaitForShutdown() {
 	wg.Wait()
 	stop()
 }
+
+func ManualShutdown() {
+	stop()
+}
