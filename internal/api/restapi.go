@@ -14,10 +14,10 @@ import (
 )
 
 type RestApi struct {
-	hub *messaging.MessageHub
+	hub messaging.MessageHub
 }
 
-func InitRestApi(hub *messaging.MessageHub) *RestApi {
+func InitRestApi(hub messaging.MessageHub) *RestApi {
 	return &RestApi{hub: hub}
 }
 

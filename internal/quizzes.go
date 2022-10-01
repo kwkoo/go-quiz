@@ -17,10 +17,10 @@ type Quizzes struct {
 	all    map[int]common.Quiz
 	mutex  sync.RWMutex
 	engine *PersistenceEngine
-	msghub *messaging.MessageHub
+	msghub messaging.MessageHub
 }
 
-func InitQuizzes(msghub *messaging.MessageHub, engine *PersistenceEngine) (*Quizzes, error) {
+func InitQuizzes(msghub messaging.MessageHub, engine *PersistenceEngine) (*Quizzes, error) {
 	keys, err := engine.GetKeys("quiz")
 	if err != nil {
 		return nil, fmt.Errorf("could not retrieve keys from redis: %v", err)

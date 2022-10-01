@@ -20,7 +20,7 @@ type webSocketRegistry interface {
 }
 
 type Sessions struct {
-	msghub         *messaging.MessageHub
+	msghub         messaging.MessageHub
 	wsRegistry     webSocketRegistry
 	mutex          sync.RWMutex
 	all            map[string]*common.Session
@@ -31,7 +31,7 @@ type Sessions struct {
 	reaperInterval int
 }
 
-func InitSessions(msghub *messaging.MessageHub, engine *PersistenceEngine, wsRegistry webSocketRegistry, auth *api.Auth, sessionTimeout int, reaperInterval int) *Sessions {
+func InitSessions(msghub messaging.MessageHub, engine *PersistenceEngine, wsRegistry webSocketRegistry, auth *api.Auth, sessionTimeout int, reaperInterval int) *Sessions {
 	log.Printf("session timeout set to %d seconds", sessionTimeout)
 
 	sessions := Sessions{

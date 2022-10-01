@@ -18,10 +18,10 @@ type Games struct {
 	mutex  sync.RWMutex
 	all    map[int]*common.Game // map key is the game pin
 	engine *PersistenceEngine
-	msghub *messaging.MessageHub
+	msghub messaging.MessageHub
 }
 
-func InitGames(msghub *messaging.MessageHub, engine *PersistenceEngine) *Games {
+func InitGames(msghub messaging.MessageHub, engine *PersistenceEngine) *Games {
 	games := Games{
 		all:    make(map[int]*common.Game),
 		engine: engine,

@@ -36,12 +36,12 @@ type Hub struct {
 	// Unregister requests from clients.
 	unregister chan *Client
 
-	msghub *messaging.MessageHub
+	msghub messaging.MessageHub
 
 	persistenceengine *PersistenceEngine
 }
 
-func NewHub(msghub *messaging.MessageHub, persistenceEngine *PersistenceEngine) *Hub {
+func NewHub(msghub messaging.MessageHub, persistenceEngine *PersistenceEngine) *Hub {
 	return &Hub{
 		incomingcommands:  make(chan *ClientCommand),
 		register:          make(chan *Client),

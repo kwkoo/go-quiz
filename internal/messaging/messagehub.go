@@ -16,30 +16,36 @@ const (
 	QuizzesTopic         = "quizzes"
 )
 
-type MessageHub struct {
+type MessageHub interface {
+	Send(topicname string, msg interface{})
+	Close()
+	GetTopic(name string) chan interface{}
+}
+
+type MessageHubImpl struct {
 	mux   sync.Mutex
 	chans map[string](chan interface{})
 }
 
-func InitMessageHub() *MessageHub {
-	return &MessageHub{
+func InitMessageHub() *MessageHubImpl {
+	return &MessageHubImpl{
 		chans: make(map[string]chan interface{}),
 	}
 }
 
-func (mh *MessageHub) Send(topicname string, msg interface{}) {
+func (mh *MessageHubImpl) Send(topicname string, msg interface{}) {
 	topic := mh.GetTopic(topicname)
 	topic <- msg
 }
 
-func (mh *MessageHub) Close() {
+func (mh *MessageHubImpl) Close() {
 	for _, c := range mh.chans {
 		close(c)
 	}
 	log.Print("MessageHub shutdown complete")
 }
 
-func (mh *MessageHub) GetTopic(name string) chan interface{} {
+func (mh *MessageHubImpl) GetTopic(name string) chan interface{} {
 	mh.mux.Lock()
 	defer mh.mux.Unlock()
 	topic, ok := mh.chans[name]
