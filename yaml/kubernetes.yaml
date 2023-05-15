@@ -57,7 +57,7 @@ spec:
         app: redis
     spec:
       containers:
-      - image: redis:5
+      - image: redis:6
         name: redis
         command:
         - /bin/bash

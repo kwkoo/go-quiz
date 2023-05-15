@@ -62,7 +62,7 @@ spec:
         app: redis
     spec:
       containers:
-      - image: image-registry.openshift-image-registry.svc:5000/openshift/redis:5-el8
+      - image: image-registry.openshift-image-registry.svc:5000/openshift/redis:6-el9
         name: redis
         env:
         - name: REDIS_PASSWORD
@@ -88,6 +88,14 @@ spec:
             - test "$(redis-cli -h 127.0.0.1 -a $REDIS_PASSWORD ping)" == "PONG"
           initialDelaySeconds: 5
           timeoutSeconds: 1
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
         resources:
           limits:
             memory: 512Mi
@@ -147,6 +155,14 @@ spec:
             port: 8080
           initialDelaySeconds: 3
           periodSeconds: 10
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
         resources: {}
       dnsPolicy: ClusterFirst
       restartPolicy: Always
