@@ -3,12 +3,12 @@ entries:
   go-quiz:
   - apiVersion: v2
     appVersion: "0.3"
-    created: "2022-07-22T17:41:52.241472+08:00"
+    created: "2023-05-16T07:02:44.346007+08:00"
     description: A web-based quiz
-    digest: 0059a84b7309e1278be74b8e341f0f97d5fd2b927a902f610e19e862ce4f5cad
+    digest: 67af6398d0c272add8c839196c62d9bcf260271dbeac1c72955e963c877e9e77
     name: go-quiz
     type: application
     urls:
     - go-quiz-0.1.0.tgz
     version: 0.1.0
-generated: "2022-07-22T17:41:52.240992+08:00"
+generated: "2023-05-16T07:02:44.345564+08:00"
